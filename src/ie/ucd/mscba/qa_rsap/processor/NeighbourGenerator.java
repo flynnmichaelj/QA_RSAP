@@ -415,24 +415,58 @@ public class NeighbourGenerator
         }
         if(ringToDelete != null)
         {
+               List<Node> retries = new ArrayList<Node>();
+               
                Random rand = new Random();
                SolutionGenerator solGenerator = new SolutionGenerator( network, nodeAdjacencies );
                for(int i=0; i<ringToDelete.getSize( )-1; i++) 
                {
                    Node thisNode = ringToDelete.getNodes( ).get( i );
                    Spur spur = solGenerator.createSrup( thisNode, network.getNetworkStructure( ).getNodes( ).getNode( ), localRings );
-                   
-                   Ring modifiedRing = insert( spur.getSpurNode( ), localRings);
-                   if(modifiedRing == null)
+                   if(spur == null)
                    {
-                       clonedSol.getSpurs( ).add(spur);
+                       retries.add(thisNode);
                    }
-                   if(modifiedRing.getSize( ) > Constants.maxLocalRingSize)
+                   else
                    {
-                       deleteInsert(clonedSol, rand);
-                   }        
+                       Ring modifiedRing = insert( spur.getSpurNode( ), localRings);
+                       if(modifiedRing == null)
+                       {
+                           clonedSol.getSpurs( ).add(spur);
+                       }
+                       if(modifiedRing.getSize( ) > Constants.maxLocalRingSize)
+                       {
+                           deleteInsert(clonedSol, rand);
+                       } 
+                   }
+               }
+               
+               //Handle possible retries
+               for(int i=0; i<retries.size(); i++) 
+               {
+                   Node thisNode = retries.get( i );
+                   Spur spur = solGenerator.createSrup( thisNode, network.getNetworkStructure( ).getNodes( ).getNode( ), localRings );
+                   if(spur == null)
+                   {
+                       //Fail Gracefully by return original sol 
+                       return sol;
+                   }
+                   else
+                   {
+                       Ring modifiedRing = insert( spur.getSpurNode( ), localRings);
+                       if(modifiedRing == null)
+                       {
+                           clonedSol.getSpurs( ).add(spur);
+                       }
+                       if(modifiedRing.getSize( ) > Constants.maxLocalRingSize)
+                       {
+                           deleteInsert(clonedSol, rand);
+                       } 
+                   }
                }
         } 
+        
+        //TODO handle hoe this affect the tertiary ring
         return clonedSol;
     }
 

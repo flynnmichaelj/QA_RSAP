@@ -36,10 +36,28 @@ import javax.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "node", propOrder = {
-    "coordinates"
+    "coordinates","nodeNumber"
 })
 public class Node {
 
+    public int nodeNumber = 0;
+    /**
+     * @return the nodeNumber
+     */
+
+    public int getNodeNumber()
+    {
+        return nodeNumber;
+    }
+
+    /**
+     * @param nodeNumber the nodeNumber to set
+     */
+    public void setNodeNumber(int nodeNumber)
+    {
+        this.nodeNumber = nodeNumber;
+    }
+    
     protected Coordinates coordinates;
     @XmlAttribute
     protected String id;

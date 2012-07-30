@@ -24,6 +24,7 @@ public class Constants
     
     public static double spurPenaltyCost  = 10;
     
+    public static int NUM_SEARCHES = 1;
     public static int loopCount = 1;
     
     public static int MIN_SIZE_FOR_SPLIT = 7;
@@ -38,12 +39,12 @@ public class Constants
     public static double probMultipleRuns = 0.5;
     
    //Quantum annealing properties
-    private static int TROTTER_NUMBER = 5;
-    private static double INITIAL_QUANTUM_FLUCTUATION=2.5;
-    private static double QUANTUM_FLUCTUATION_STEP=0.1;
-    private static double INITIAL_TEMPERATURE=0.334;
-    private static double TEMPERATURE_STEP=1.0;
-    private static double MCS_AT_STEP=25.0;
+    public static int TROTTER_NUMBER = 5;
+    public static double INITIAL_QUANTUM_FLUCTUATION=2.5;
+    public static double QUANTUM_FLUCTUATION_STEP=0.1;
+    public static double INITIAL_TEMPERATURE=0.334;
+    public static double TEMPERATURE_STEP=1.0;
+    public static int MCS_AT_STEP=25;
     //CLASSICAL_PREANNEALING=3 1 0.1
     
     
