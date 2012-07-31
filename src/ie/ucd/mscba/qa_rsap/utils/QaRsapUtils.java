@@ -12,7 +12,9 @@ package ie.ucd.mscba.qa_rsap.utils;
 
 import ie.ucd.mscba.qa_rsap.valueobjects.AdjNode;
 import ie.ucd.mscba.qa_rsap.valueobjects.Ring;
+import ie.ucd.mscba.qa_rsap.valueobjects.Spur;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import de.zib.sndlib.network.Node;
@@ -102,6 +104,43 @@ public class QaRsapUtils
                 isOnRing = true;         
         }
         return isOnRing;
+    }
+    
+    public static List<String> nodesToRemove(Ring tertiaryRing, List<Spur> spurs, String src, String target)
+    {
+        List<String> nodesToRemove = new ArrayList<String>( );
+        if(tertiaryRing != null)
+        {            
+            //1) Remove nodes already on Tertiary ring
+            for(int i=0; i<tertiaryRing.getNodes( ).size( ); i++)
+            {
+                Node thisNode = tertiaryRing.getNodes( ).get( i );
+                if(!(thisNode.getId( )).equalsIgnoreCase( src ) &&
+                                !(thisNode.getId( )).equalsIgnoreCase( target ) )
+                {
+                    nodesToRemove.add(thisNode.getId() );
+                }
+            }
+        }
+        //2) remove nodes that are spurs
+        for(int i=0; i<spurs.size(); i++)
+        {
+            nodesToRemove.add(spurs.get( i ).getSpurNode( ).getId( ));
+        }
+        return nodesToRemove;
+    }
+    
+    public static int countRealNode(Ring tertiaryRing)
+    {
+        int numRealNode = 0;
+        for(int i=0; i<tertiaryRing.getSize( ); i++)
+        {
+            if(!"TempNode".equalsIgnoreCase( tertiaryRing.getSpecificNode( i ).getId( )))
+            {
+                numRealNode++;
+            }
+        }
+        return numRealNode;
     }
 
 }

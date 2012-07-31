@@ -24,7 +24,7 @@ public class Constants
     
     public static double spurPenaltyCost  = 10;
     
-    public static int NUM_SEARCHES = 1;
+    public static int NUM_SEARCHES = 5;
     public static int loopCount = 1;
     
     public static int MIN_SIZE_FOR_SPLIT = 7;

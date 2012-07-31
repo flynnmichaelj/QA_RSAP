@@ -101,13 +101,16 @@ public class OCC
             thisSlice[index1][index2] = thisSlice[index1][index2] +1;
         }
         //Handle tertiary Ring
-        List<Node> ringNodes = tertiaryRing.getNodes( );
-        for(int j = 0; j<ringNodes.size()-1; j++)
+        if(tertiaryRing != null)
         {
-            int index1 = ringNodes.get(j).getNodeNumber( );
-            int index2 = ringNodes.get(j+1).getNodeNumber( );
-            thisSlice[index1][index2] = thisSlice[index1][index2] +1;
-        }    
+            List<Node> ringNodes = tertiaryRing.getNodes( );
+            for(int j = 0; j<ringNodes.size()-1; j++)
+            {
+                int index1 = ringNodes.get(j).getNodeNumber( );
+                int index2 = ringNodes.get(j+1).getNodeNumber( );
+                thisSlice[index1][index2] = thisSlice[index1][index2] +1;
+            }    
+        }
     }
     
     public void getOCC(Solution currentSol, int numNodes)
@@ -147,13 +150,16 @@ public class OCC
                 thisSlice[index1][index2] = thisSlice[index1][index2] +1;
             }
             //Handle tertiary Ring
-            List<Node> ringNodes = tertiaryRing.getNodes( );
-            for(int j = 0; j<ringNodes.size()-1; j++)
+            if(tertiaryRing!= null)
             {
-                int index1 = ringNodes.get(j).getNodeNumber( );
-                int index2 = ringNodes.get(j+1).getNodeNumber( );
-                thisSlice[index1][index2] = thisSlice[index1][index2] +1;
-            }    
+                List<Node> ringNodes = tertiaryRing.getNodes( );
+                for(int j = 0; j<ringNodes.size()-1; j++)
+                {
+                    int index1 = ringNodes.get(j).getNodeNumber( );
+                    int index2 = ringNodes.get(j+1).getNodeNumber( );
+                    thisSlice[index1][index2] = thisSlice[index1][index2] +1;
+                }
+            }
         }
         for( int r = 0 ; r<Constants.TROTTER_NUMBER-1; r++)
         {
@@ -299,7 +305,7 @@ public class OCC
         }
         
         // change of the number of different occ between k and k+1
-        if (k!=Constants.TROTTER_NUMBER) 
+        if (k!=Constants.TROTTER_NUMBER-1) 
         {
             int[][] thisSlice = getTrotterSlices().get(k+1);
             //Handle local ring

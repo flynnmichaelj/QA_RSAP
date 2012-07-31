@@ -100,7 +100,7 @@ public class SolutionGenerator
         //Generate tertiary ring if we have mode than one local ring
         if(sol.getLocalrings( ).size( ) >1 )
         {
-            Ring tertiaryRing = generateTertiaryRing(sol.getLocalrings(), tempNodeList);
+            Ring tertiaryRing = generateTertiaryRing(sol.getSpurs( ), sol.getLocalrings(), tempNodeList);
             if(tertiaryRing!=null)
             {
                  sol.setTertiaryRing(tertiaryRing);
@@ -122,7 +122,7 @@ public class SolutionGenerator
     //=======================================
     //GenerateTertiaryRing
     //======================================
-    public Ring generateTertiaryRing(List<Ring> rings, List<Node> tempNodeList)
+    public Ring generateTertiaryRing(List<Spur> spurs, List<Ring> rings, List<Node> tempNodeList)
     {
         boolean validTertiaryRingFound = true;
         List<Ring> nonvisitedRings = new ArrayList<Ring>(rings);
@@ -184,10 +184,6 @@ public class SolutionGenerator
         
         if(validTertiaryRingFound)
         {
-            System.out.println("+++++++++++++++++++" );
-            System.out.println("Last Node:" + (tertiaryRing.getNodes( ).get( tertiaryRing.getSize( )-1).getId()) );
-            System.out.println("+++++++++++++++++++++" );
-            
             if(tertiaryRing.getSize( ) < 3)
             {
                 Node lastNode = tertiaryRing.getNodes( ).get( tertiaryRing.getSize( )-1);
@@ -209,11 +205,11 @@ public class SolutionGenerator
             //call dijsktra back to start
             Dijkstra dijkstra = new Dijkstra();
             //Remove node that are already on tertiary ring
-            List<String> nodesToRemove = new ArrayList<String>();
-            for(int i=1; i<tertiaryRing.getNodes( ).size( )-1; i++)
-            {
-                nodesToRemove.add(tertiaryRing.getNodes( ).get( i ).getId() );
-            }
+            List<String> nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, spurs, 
+                                                        tertiaryRing.getNodes( ).get(0).getId( ),
+                                                        tertiaryRing.getNodes( ).get(tertiaryRing.getSize( )-1).getId( )
+                                                        );
+            
             List<Node> reducedAllNodes = new ArrayList<Node>(network.getNetworkStructure( ).getNodes( ).getNode( ));
             List<Node> origAllNode = network.getNetworkStructure( ).getNodes( ).getNode( );
             for(int i=0; i<nodesToRemove.size( ); i++)
@@ -228,11 +224,19 @@ public class SolutionGenerator
                                     reducedAllNodes, 
                                     nodeAdjacencies.reducedClone(nodesToRemove));
             
-            String key = returnedNodes.firstKey( );
-            DijkstraNode returnedNode = returnedNodes.get( key );
-            for(String nodeName : returnedNode.getPathFromRoot( ))
+            if(returnedNodes != null)
             {
-                tertiaryRing.getNodes( ).add(QaRsapUtils.getNodeById( nodeName, network.getNetworkStructure( ).getNodes( ).getNode( ) ));
+                String key = returnedNodes.firstKey( );
+                DijkstraNode returnedNode = returnedNodes.get( key );
+                for(String nodeName : returnedNode.getPathFromRoot( ))
+                {
+                    tertiaryRing.getNodes( ).add(QaRsapUtils.getNodeById( nodeName, network.getNetworkStructure( ).getNodes( ).getNode( ) ));
+                }
+            }
+            else
+            {
+                //cannot find path back. Failed to build tertiray Ring
+                return null;
             }
         }
         

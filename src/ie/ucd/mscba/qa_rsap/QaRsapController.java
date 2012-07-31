@@ -38,8 +38,8 @@ public class QaRsapController
     {
         //Set a default file name if none exists
         if(fileName == null)
-            //fileName = "resources/dfn-bwin.xml";
-            fileName = "resources/atlanta.xml";
+            fileName = "resources/dfn-bwin.xml";
+            //fileName = "resources/atlanta.xml";
        
         //===========================================================
         //(1)    Build Network Object representation from input file
@@ -134,17 +134,18 @@ public class QaRsapController
                 {
                    temp = Constants.INITIAL_TEMPERATURE*(double)(iann/(double)n_ann);  //! classical annealing (temp->0);
                 }
-                System.out.println("Called anneal for iSearch:" + iSearch);
+                //System.out.println("Called anneal for iann:" + iann + "@ temp: " + temp);
                 anneal(networkLinks, solutionsForAnnealing, nodeAdjacencies,  network, temp, gam, Constants.MCS_AT_STEP, iSearch) ; 
-                System.out.println("Finished anneal for iSearch:" + iSearch);
+               // System.out.println("Finished anneal for iann:" + iann);
+                
                 iann--;
             } 
             if(Constants.TROTTER_NUMBER != 1) 
             {
                 gam = 0.000000001;     // last step of quantum annealing at gam=0 (Well, almost zero)
-                System.out.println("Called final anneal for iSearch:" + iSearch);
+                //System.out.println("Called final anneal for iSearch:" + iSearch);
                 anneal(networkLinks, solutionsForAnnealing, nodeAdjacencies,  network, temp, gam, Constants.MCS_AT_STEP, iSearch) ;
-                System.out.println("Finished final anneal for iSearch:" + iSearch);
+                //System.out.println("Finished final anneal for iSearch:" + iSearch);
             }
         }
         
@@ -162,6 +163,14 @@ public class QaRsapController
         //===================================
         //(4)   Output final results
         //===================================
+        
+        System.out.println( "============= Overall Best Sol =============" );
+        overAllBestSol.printLocalRing( );
+        overAllBestSol.printSpurs( );
+        overAllBestSol.printTertiaryRing( );
+        System.out.println( "Cost:" + overAllBestSol.getTotalCost( ) );
+        System.out.println( "============= Overall Best Sol  =============" );
+
         GraphView view = new GraphView();
         view.drawGraph(overAllBestSol);
     }
@@ -193,6 +202,7 @@ public class QaRsapController
             //{
                 for (int k = 0; k<Constants.TROTTER_NUMBER ; k++)           // loop over Trotter slices      
                 {
+                    //System.out.println("Entered Trotter slice: " + k + "For nmcs: " + istep);
                     Solution bestSolSoFar = currrentSliceSolutions[k];                
                     Solution vnsResult = null;
             
@@ -241,13 +251,21 @@ public class QaRsapController
                         }          
                     }
                     
-                    System.out.println( "============= VNS SOL =============" );
+                    /**System.out.println( "============= VNS SOL =============" );
                     bestSolSoFar.printLocalRing( );
                     bestSolSoFar.printSpurs( );
                     bestSolSoFar.printTertiaryRing( );
-                    System.out.println( "============= END VNS SOL =============" );
+                    System.out.println( "============= END VNS SOL =============" );*/
                     
-                    VnsDistDiff = bestSolSoFar.getTotalCost( ) - vnsResult.getTotalCost();
+                    VnsDistDiff = vnsResult.getTotalCost() - bestSolSoFar.getTotalCost( );
+                    if(VnsDistDiff > 0.0)
+                    {
+                        String h = "dsdfs";
+                    }
+                    else if(VnsDistDiff < 0.0)
+                    {
+                        String h= "sdsdf";
+                    }
                     double change = 0;
                     
                     OCCChangeHolder changHolder = null;
@@ -257,7 +275,8 @@ public class QaRsapController
                        change = changHolder.getChangem( ) + changHolder.getChangep( );
                     } 
                     
-                    if(Math.random( ) < Math.pow( 1.05, (-beta*VnsDistDiff - betaTrotter*(double)change))) 
+                    double decisionFactor = Math.random( );
+                    if(decisionFactor < Math.pow( 1.05, (-beta*VnsDistDiff - betaTrotter*(double)change))) 
                     {
                         currrentSliceSolutions[k] = vnsResult;
                         
@@ -269,7 +288,7 @@ public class QaRsapController
                             {
                                 occ.getDiffOcc( )[k-1] = occ.getDiffOcc( )[k-1] + changHolder.getChangem();
                             }
-                            if(k!=Constants.TROTTER_NUMBER) 
+                            if(k!=Constants.TROTTER_NUMBER-1) 
                             {
                                 occ.getDiffOcc( )[k]   = occ.getDiffOcc( )[k]   + changHolder.getChangep( );
                             }
@@ -289,6 +308,7 @@ public class QaRsapController
     
     private Solution invokeVNS(Solution inputSol, long runTimes, int neighbourhoodSearch, List<Link> networkLinks, NeighbourGenerator ng, NodeAdjacencies adjList)
     {
+        System.out.println(neighbourhoodSearch);
         Solution nsHolder = null;
         Solution bestVNSSol = null;
         double bestVNSCost = Double.POSITIVE_INFINITY;

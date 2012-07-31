@@ -58,29 +58,36 @@ public class Dijkstra
         while(!dijkstraNodeMap.isEmpty( ))
         {
             DijkstraNode dn = findMin( dijkstraNodeMap );
-            responseMap.put( dn.getNodeName( ), dn );
-            dn.setVisited( true );
-            List<AdjNode> adjList = dn.getAdjList( );
-            for (int j=0; j<adjList.size( ); j++)
+            if(dn != null)
             {
-                AdjNode thisAdjNode = adjList.get(j);
-                DijkstraNode thisDn = dijkstraNodeMap.get(thisAdjNode.getNodeName( ));
-                if(thisDn == null)
+                responseMap.put( dn.getNodeName( ), dn );
+                dn.setVisited( true );
+                List<AdjNode> adjList = dn.getAdjList( );
+                for (int j=0; j<adjList.size( ); j++)
                 {
-                    thisDn = responseMap.get(thisAdjNode.getNodeName( ));
-                }
-                if(thisDn.getDistanceToRoot( ) > dn.getDistanceToRoot( ) + thisAdjNode.getCost( ))
-                {
-                    thisDn.setDistanceToRoot( dn.getDistanceToRoot( ) + thisAdjNode.getCost( ) );
-                    List<String> newPathList = new ArrayList<String>();
-                    List<String> pathFromRoot = dn.getPathFromRoot( );
-                    for(String thisString : pathFromRoot)
+                    AdjNode thisAdjNode = adjList.get(j);
+                    DijkstraNode thisDn = dijkstraNodeMap.get(thisAdjNode.getNodeName( ));
+                    if(thisDn == null)
                     {
-                        newPathList.add(thisString);
+                        thisDn = responseMap.get(thisAdjNode.getNodeName( ));
                     }
-                    newPathList.add(thisDn.getNodeName( ));
-                    thisDn.setPathFromRoot(newPathList);
+                    if(thisDn.getDistanceToRoot( ) > dn.getDistanceToRoot( ) + thisAdjNode.getCost( ))
+                    {
+                        thisDn.setDistanceToRoot( dn.getDistanceToRoot( ) + thisAdjNode.getCost( ) );
+                        List<String> newPathList = new ArrayList<String>();
+                        List<String> pathFromRoot = dn.getPathFromRoot( );
+                        for(String thisString : pathFromRoot)
+                        {
+                            newPathList.add(thisString);
+                        }
+                        newPathList.add(thisDn.getNodeName( ));
+                        thisDn.setPathFromRoot(newPathList);
+                    }
                 }
+            }
+            else
+            {
+                break;
             }
         }
         
@@ -99,7 +106,10 @@ public class Dijkstra
                     break;
                 }
             }
-            returnedMap.put( foundNode.getNodeName( ), foundNode );
+            if(foundNode != null)
+                returnedMap.put( foundNode.getNodeName( ), foundNode );
+            else
+                return null;
         }
         else
         {
@@ -123,7 +133,8 @@ public class Dijkstra
                 returned = thisNode;
             }
         }
-        dijkstraNodeMap.remove( returned.getNodeName( ) );
+        if(returned != null)
+            dijkstraNodeMap.remove( returned.getNodeName( ) );
         return returned;
     }
 }
