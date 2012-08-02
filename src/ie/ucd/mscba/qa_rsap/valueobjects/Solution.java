@@ -11,11 +11,15 @@
 package ie.ucd.mscba.qa_rsap.valueobjects;
 
 import ie.ucd.mscba.qa_rsap.Constants;
+import ie.ucd.mscba.qa_rsap.utils.QaRsapUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import de.zib.sndlib.network.Link;
+import de.zib.sndlib.network.Node;
 
 /**
  * 
@@ -32,17 +36,21 @@ public class Solution
        public Solution clone()
        {
            Solution cloned = new Solution();
-           for(Ring ring : getLocalrings())
+           List<Ring> localRings = getLocalrings();
+           List<Spur> spurs = getSpurs();
+           Ring tertiaryRing = getTertiaryRing( );
+           
+           for(int i=0; i<localRings.size(); i++)
            {
-               cloned.getLocalrings().add(ring.clone());
+               cloned.getLocalrings().add(localRings.get(i).clone());
            }
-           for(Spur spur : getSpurs())
+           for(int i=0; i<spurs.size(); i++)
            {
-               cloned.getSpurs().add(spur.clone());
+               cloned.getSpurs().add(spurs.get(i).clone());
            }
-           if(getTertiaryRing( ) != null)
+           if(tertiaryRing != null)
            {
-               cloned.setTertiaryRing(getTertiaryRing( ).clone( ));
+               cloned.setTertiaryRing(tertiaryRing.clone( ));
            }
            cloned.totalCost = totalCost;
            
@@ -143,30 +151,28 @@ public class Solution
     
     public void printLocalRing ()
     {
+        //Print Local Ring
+        System.out.println("******** LOCAL RING *********");
         for(Ring ring : this.getLocalrings( ))
         {
-            //Print Local Ring
-            System.out.println("******** LOCAL RING *********");
             for(int i=0; i<ring.getSize( ); i++ )
             {
                 System.out.print( ring.getSpecificNodeName(i) + " --> " );
-            }
-            System.out.println("");
-            System.out.println("*****************************");
+            }  
+            System.out.println( );
         }
-        
+        System.out.println("*****************************");
     }
     
     public void printSpurs()
     {
-
+        System.out.println("******** SPUR *********");
         for(Spur spur : this.getSpurs( ))
-        {
-            System.out.println("******** SPUR *********");
-            System.out.print(spur.getParentNode( ).getId( ) + " --> " + spur.getSpurNode( ).getId( ));
-            System.out.println("");
-            System.out.println("*********************");
+        {  
+            System.out.println(spur.getParentNode( ).getId( ) + " --> " + spur.getSpurNode( ).getId( ));
+            System.out.println( );
         }
+        System.out.println("*********************");
     }
     
     public void printTertiaryRing()
@@ -177,11 +183,162 @@ public class Solution
         {
             for(int i=0; i<this.getTertiaryRing( ).getSize( ); i++ )
             {
-                System.out.print(this.getTertiaryRing( ).getSpecificNodeName(i) + " --> " );
+                System.out.print(this.getTertiaryRing( ).getSpecificNodeName(i) + " --> " );  
+            }
+            System.out.println( );
+        }
+        System.out.println("*****************************");
+    }
+    
+    //===========================================
+    //Validate Solution
+    //============================================
+    public boolean validate(NodeAdjacencies nodeAdjs, int numNodesInPlay)
+    {
+        boolean valid = true;
+        //Validate local rings
+        for(Ring ring : getLocalrings( ))
+        {         
+            if(!validateRings(ring, nodeAdjs, "local" ))
+            {
+                System.out.println("ERROR: A local ring is not valid");
+                printBadSolution();
+                valid = false;
+                break;
+            }
+                
+        }
+        
+        //Validate tertiary Ring
+        if(getTertiaryRing( ) != null)
+        {
+            if(!validateRings(getTertiaryRing( ), nodeAdjs, "tertiary" ))
+            {
+                System.out.println("ERROR: Tertiary ring is not valid");
+                printBadSolution();
+                valid=false;
+                
             }
         }
-        System.out.println("");
-        System.out.println("*****************************");
+        
+        //Ensure a node is not on more than one local ring & spurs
+        List<Node> nodesOnRing = new ArrayList<Node>();
+        int countOfNodes = 0;
+        for(Ring ring : getLocalrings( ))
+        {   
+            for(int i=0; i<ring.getNodes( ).size( )-1; i++)
+            { 
+                countOfNodes ++;
+                Node node =  ring.getNodes( ).get( i );
+                if(!nodesOnRing.contains(node))
+                {
+                    nodesOnRing.add(node );
+                }
+                else
+                {
+                    System.out.println("ERROR: Duplicate node found on more than one local rings:" + node.getId( ));
+                    printBadSolution();
+                    valid=false; 
+                }
+            }             
+        }
+        for(int i=0; i<getSpurs( ).size( ); i++)
+        {
+            countOfNodes++;
+            Spur thisSpur = getSpurs( ).get(i);
+            if(!nodesOnRing.contains(thisSpur.getSpurNode( )))
+            {
+                nodesOnRing.add(thisSpur.getSpurNode( ) );
+            }
+            else
+            {
+                System.out.println("ERROR: Duplicate node found ona ring and a spur" + thisSpur.getSpurNode( ).getId( ));
+                printBadSolution();
+                valid=false; 
+            }
+        }
+        //Validate the correct number of nodes are in play
+        if(countOfNodes != numNodesInPlay)
+        {
+            System.out.println("ERROR: Incorrect number of nodes in play. Found " + countOfNodes +". Should be " + numNodesInPlay);
+            printBadSolution();
+            valid=false; 
+        }
+        return valid;
+    }
+    
+    private boolean validateRings(Ring ring, NodeAdjacencies nodeAdjs, String ringType)
+    {
+        boolean valid = true;
+        
+        //Check for a minimum length of 4 (3 node + duplicate)
+        if(ring.getSize( ) < 4)
+        {
+            System.out.println("ERROR: Invalid Ring lenght on " +ringType+ ". Lenght is:" + ring.getSize( ));
+            printBadSolution();
+            valid=false;
+        }
+        
+        //Check is end node and start node the same
+        if(ring.getSpecificNode( 0 ) != ring.getSpecificNode(ring.getSize( )-1 ))
+        {
+            System.out.println("ERROR: End node and start node is not the same");
+            printBadSolution();
+            valid=false;
+        }
+        
+        //Ensure node is not repeated on a ring & no TempNodes exist
+        List<Node> nodesOnRing = new ArrayList<Node>();
+        for(int i=0; i<ring.getNodes( ).size( )-1; i++)
+        {
+            Node node = ring.getNodes( ).get(i);
+            if("TempNode".equalsIgnoreCase(node.getId( )))
+            {
+                System.out.println("ERROR: TempNode Still exists in "+ringType+ " ring");
+                printBadSolution();
+                valid=false;   
+            }
+            else
+            {
+                if(!nodesOnRing.contains(node))
+                {
+                    nodesOnRing.add(node);
+                }
+                else
+                {
+                    System.out.println("ERROR: Duplicate node found in " +ringType+ " ring:" + node.getId( ));
+                    printBadSolution();
+                    valid=false; 
+                }
+            }
+        }
+        
+        //Ensure all node on the ring are adjacent
+        for(int i=0; i<ring.getNodes( ).size( )-1; i++)
+        {
+           Node leftNode = ring.getNodes( ).get( i );
+           Node rightNode = ring.getNodes( ).get( i+1 );
+           List<AdjNode> adjList = nodeAdjs.getAdjList( leftNode.getId( ) );
+           if(!QaRsapUtils.isAdj( rightNode.getId( ), adjList ))
+           {
+               System.out.println("ERROR: Nodes not adjacent:" + leftNode.getId( ) + " & " + rightNode.getId( ));
+               printBadSolution();
+               valid=false;  
+           }
+        }
+        
+        return valid;
+    }
+    
+    private void printBadSolution()
+    {
+        System.out.println( "============= Validate Solution =============" );
+        printLocalRing( );
+        printSpurs( );
+        printTertiaryRing( );
+        System.out.println( "============= End Validate Solution =============" );
+        
+        //System.exit( 1 );
     }
        
 }

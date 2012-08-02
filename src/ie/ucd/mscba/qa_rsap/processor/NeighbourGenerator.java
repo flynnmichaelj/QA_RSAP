@@ -20,12 +20,14 @@ import ie.ucd.mscba.qa_rsap.valueobjects.Ring;
 import ie.ucd.mscba.qa_rsap.valueobjects.Solution;
 import ie.ucd.mscba.qa_rsap.valueobjects.Spur;
 
+import java.security.AllPermission;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import java.util.TreeMap;
 
+import de.zib.sndlib.network.Link;
 import de.zib.sndlib.network.Network;
 import de.zib.sndlib.network.Node;
 
@@ -36,33 +38,43 @@ public class NeighbourGenerator
 {
     NodeAdjacencies nodeAdjacencies;
     Network         network;
-
+    List<Link>      networkLinks;
+    List<Node>      networkNodes;
+    
     public NeighbourGenerator( NodeAdjacencies nodeAdjacencies, Network network )
     {
         this.nodeAdjacencies = nodeAdjacencies;
         this.network = network;
+        this.networkLinks = network.getNetworkStructure( ).getLinks( ).getLink( );
+        this.networkNodes = network.getNetworkStructure( ).getNodes( ).getNode( );
     }
 
-    public void deleteInsert(Solution clonedSol , Random rand)
+    public boolean deleteInsert(Solution clonedSol , Random rand)
     {
+        boolean success = false;
+        
         List<Ring> localRings = clonedSol.getLocalrings( );
         boolean changeFound = false;
         int  maxTriesCounter = 0;
-        while(!changeFound && maxTriesCounter <= 5)
+        while(!changeFound && maxTriesCounter <= 10)
         {
+            maxTriesCounter ++;
+            
             Ring selectedRing = null; //Focus on rings the breach max size constraint
             for(Ring ring : localRings)
             {
                 if(ring.getSize() > Constants.maxLocalRingSize)
+                {
                     selectedRing = ring;
-                break;
+                    break;
+                }
             }
             if(selectedRing == null)
             {
                 List<Ring> clonedListForDel = new ArrayList<Ring>();
                 for(Ring ring : localRings)
                 {
-                    if(ring.getSize() > 3)
+                    if(ring.getSize() > 4)
                         clonedListForDel.add(ring);
                 }
                 if(clonedListForDel.size() > 0)
@@ -73,12 +85,16 @@ public class NeighbourGenerator
         
             boolean notOnTertiaryRing = false;
             Node selectedNode = null;
-            while(clonedSol.getTertiaryRing( )!=null && !notOnTertiaryRing)
+            int nodeMaxTries = 0;
+            while(clonedSol.getTertiaryRing( )!=null && !notOnTertiaryRing && nodeMaxTries < 20)
             {
+                nodeMaxTries ++;
                 selectedNode = selectedRing.getNodes( ).get(rand.nextInt(selectedRing.getNodes().size()));
                 if(!QaRsapUtils.isNodeOnRing( selectedNode, clonedSol.getTertiaryRing( )))
-                    notOnTertiaryRing = true; 
+                    notOnTertiaryRing = true;   
             }
+            if(selectedNode == null)
+                continue;
             
             List<Ring> clonedListforIns = new ArrayList<Ring>();
             for(Ring ring : localRings)
@@ -90,11 +106,23 @@ public class NeighbourGenerator
             Ring modifiedRing = insert(selectedNode, clonedListforIns);
             if(modifiedRing != null)
             {
-                delete( selectedNode, selectedRing ); 
-                changeFound = true;
+                if(delete( selectedNode, selectedRing ))
+                {
+                    changeFound = true;
+                    success = true;
+                }
+                else
+                {
+                    //Delete failed so remove from inserted ring to avoid corrupting solution
+                    if(!delete( selectedNode, modifiedRing ))
+                    {
+                        //if remove also fails, end search and return original sol to avoid corruption
+                        return false;
+                    }
+                }
             }
-            maxTriesCounter ++;
         }
+        return success;
     }
     
     public boolean delete(Node deleteNode, Ring deleteRing)
@@ -263,9 +291,21 @@ public class NeighbourGenerator
         {
             if(sol.getLocalrings( ).size( ) > 1)
             {
-                deleteInsert(clonedSol, rand);
+                if(!deleteInsert(clonedSol, rand))
+                {
+                    //return original to avoid corrupted solution
+                    return sol;
+                }
             }
         }
+        
+        //Validate soluton
+        boolean valid = clonedSol.validate(nodeAdjacencies, networkNodes.size( ) );
+        if(!valid)
+        {
+            System.out.println("ERROR DELETE INSERT SEARCH: SOLUTION NOT VALID");
+        }
+        
         return clonedSol;
     }
 
@@ -378,8 +418,8 @@ public class NeighbourGenerator
                   //preform removes
                   if(initNodePos == 0)
                   {
-                      initRing.getNodes( ).remove(0);
                       initRing.getNodes( ).remove(initRing.getSize( )-1);
+                      initRing.getNodes( ).remove(0);    
                   }
                   else
                   {
@@ -387,8 +427,8 @@ public class NeighbourGenerator
                   }
                   if(secondNodePos == 0)
                   {
-                      secondRing.getNodes( ).remove(0);
-                      secondRing.getNodes( ).remove(initRing.getSize( )-1);
+                      secondRing.getNodes( ).remove(secondRing.getSize( )-1);
+                      secondRing.getNodes( ).remove(0);  
                   }
                   else
                   {
@@ -400,7 +440,7 @@ public class NeighbourGenerator
                   if(secondNodePos == 0)
                   {
                       secondRing.getNodes( ).add(0, initNode );
-                      secondRing.getNodes( ).add(initRing.getSize( )-1, initNode );
+                      secondRing.getNodes( ).add(secondRing.getSize( ), initNode );
                   }
                   else
                   {                  
@@ -420,6 +460,14 @@ public class NeighbourGenerator
               }
               maxTries++;
           }
+          
+          //Validate soluton
+          boolean valid = clonedSol.validate(nodeAdjacencies, networkNodes.size( ));
+          if(!valid)
+          {
+              System.out.println("ERROR NODE SWAP SEARCH: SOLUTION NOT VALID");
+          }
+          
           return clonedSol;
     }
     
@@ -457,11 +505,7 @@ public class NeighbourGenerator
                    else
                    {
                        Ring modifiedRing = insert( spur.getSpurNode( ), localRings);
-                       if(modifiedRing != null)
-                       {
-                           clonedSol.getSpurs( ).add(spur);
-                       } 
-                       else
+                       if(modifiedRing == null)
                        {
                            retries.add(thisNode);
                        }
@@ -482,11 +526,7 @@ public class NeighbourGenerator
                    else
                    {
                        Ring modifiedRing = insert( spur.getSpurNode( ), localRings);
-                       if(modifiedRing != null)
-                       {
-                           clonedSol.getSpurs( ).add(spur);
-                       }
-                       else
+                       if(modifiedRing == null)
                        {
                            //Fail Gracefully by return original sol 
                            return sol;
@@ -494,6 +534,13 @@ public class NeighbourGenerator
                    }
                }
         } 
+        
+        //Validate soluton
+        boolean valid = clonedSol.validate(nodeAdjacencies,networkNodes.size( ));
+        if(!valid)
+        {
+            System.out.println("ERROR DELETE SMALL RING SEARCH: SOLUTION NOT VALID");
+        }
         
         //TODO handle hoe this affect the tertiary ring
         return clonedSol;
@@ -503,215 +550,548 @@ public class NeighbourGenerator
     // Tertiary Ring searches
     //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     public Solution tertiaryRingSearch(Solution sol)
-    {
+    {        
         Solution clonedSol = sol.clone();
+   
         List<Ring> localRings = clonedSol.getLocalrings();
         Ring tertiaryRing = clonedSol.getTertiaryRing();
+        List<Spur> spurs = clonedSol.getSpurs( );
         
+        //First remove the last node on the tertiary ring
+        tertiaryRing.getNodes( ).remove(tertiaryRing.getSize( )-1);
+        
+        //Disconnect selected ring 
         Random rand = new Random();
         Ring initRing = localRings.get(rand.nextInt(localRings.size()));
         for(Node node : initRing.getNodes( ))
         {
-            //Disconnect selected ring 
+           
             int posOnRing = findNodePosOnRing( tertiaryRing, node );
             if(posOnRing > -1)
             {
-                Node dummyNode = new Node();
-                dummyNode.setId("TempNode");
-                //Remove
-                if(posOnRing == 0)
-                {
-                    tertiaryRing.getNodes( ).remove(0);
-                    tertiaryRing.getNodes( ).remove(tertiaryRing.getSize( )-1);
-                }
-                else
-                {
-                    tertiaryRing.getNodes( ).remove(posOnRing);
-                }
-                //Add
-                if(posOnRing == 0)
-                {
-                    tertiaryRing.getNodes( ).add(0, dummyNode );
-                    tertiaryRing.getNodes( ).add(tertiaryRing.getSize( ), dummyNode );
-                }
-                else
-                {                  
-                    tertiaryRing.getNodes( ).add(posOnRing, dummyNode );
-                }   
+                tertiaryRing.getNodes( ).remove(posOnRing);
             }   
         }
-       //Reform tertiary ring by removing dummy nodes.
-        for(int i=0; i<tertiaryRing.getSize( ); i++)
+        
+        Dijkstra dijkstra = new Dijkstra();
+        List<Node> allNetworkNodes = network.getNetworkStructure( ).getNodes( ).getNode( );
+        if(tertiaryRing.getSize( ) == 1)
         {
-            if(QaRsapUtils.countRealNode( tertiaryRing ) <=1)
+            //do nothing
+        }
+        else
+        {
+            //ensure each node on the tertiary are adjacent to the next
+            //If not call dijkstra to connect them.
+            for(int i=0; i<tertiaryRing.getSize( )-1; i++ )
             {
-                //Fail gracefully
-                clonedSol.setTertiaryRing( null );
-                SolutionGenerator solGenerator = new SolutionGenerator( network, nodeAdjacencies );
-                List<Node> tempNodeList = new ArrayList<Node>(network.getNetworkStructure( ).getNodes( ).getNode());
-                List<Spur> spurs = clonedSol.getSpurs();
-                for(Spur spur : spurs)
+                Node leftNode = tertiaryRing.getSpecificNode(i);
+                Node rightNode = tertiaryRing.getSpecificNode(i+1);
+                if(!QaRsapUtils.isAdj(leftNode.getId( ), nodeAdjacencies.getAdjList( rightNode.getId( ))))
                 {
-                    tempNodeList.remove(spur.getSpurNode());
-                }
-                tertiaryRing = solGenerator.generateTertiaryRing( clonedSol.getSpurs( ), clonedSol.getLocalrings( ), tempNodeList );
-                if(tertiaryRing!=null)
-                {
-                     clonedSol.setTertiaryRing(tertiaryRing);
-                }
-                else
-                {
-                    return sol; //Cannot complete search, return original unchanged sol.
-                }      
-            }
-            
-            Node thisNode = tertiaryRing.getNodes( ).get( i );
-            Node leftSide = null;
-            Node rightSide = null;
-            if("TempNode".equals(thisNode.getId( )))
-            {
-                if(i==0)
-                {
-                    leftSide = tertiaryRing.getNodes( ).get( tertiaryRing.getSize( )-2 );
-                    rightSide = tertiaryRing.getNodes( ).get( 1 );    
-                }
-                else if(i == tertiaryRing.getSize( )-1)
-                {
-                    leftSide = tertiaryRing.getNodes( ).get( i-1);
-                    rightSide = tertiaryRing.getNodes( ).get( 0 );                 
-                }
-                else
-                {
-                    leftSide = tertiaryRing.getNodes( ).get( i-1 );
-                    rightSide = tertiaryRing.getNodes( ).get( i+1 ); 
-                }
-                if("TempNode".equals(rightSide.getId( )))
-                {
-                    tertiaryRing.removeNode(rightSide);
-                    i--;
-                    continue;
-                }
-                else if("TempNode".equals(leftSide.getId( )))
-                {
-                    tertiaryRing.removeNode(leftSide);
-                    i--;
-                    continue;
-                }
-                else
-                {
-                    tertiaryRing.getNodes( ).remove(i);
-                    if(i==0)
-                    {
-                        tertiaryRing.getNodes().remove(tertiaryRing.getSize( )-1);
-                    }
-                    
-                    if(tertiaryRing.getSize( ) < 3)
-                    {
-                        Node lastNode = tertiaryRing.getNodes( ).get( tertiaryRing.getSize( )-1);
-                        List<AdjNode> adjList = nodeAdjacencies.getAdjList( lastNode.getId( ) );
-                        boolean notOnTertiaryRing = false;
-                        int counter = 0;
-                        while(!notOnTertiaryRing)
-                        {
-                            Node nodeToInsert = QaRsapUtils.getNodeById(adjList.get(counter).getNodeName( ), network.getNetworkStructure( ).getNodes( ).getNode( ) );
-                            if(!QaRsapUtils.isNodeOnRing( thisNode, tertiaryRing ))
-                            {
-                                tertiaryRing.getNodes( ).add( nodeToInsert );
-                                notOnTertiaryRing = true;
-    
-                                leftSide = nodeToInsert;
-                                rightSide = tertiaryRing.getSpecificNode( 0 );
-             
-                            }
-                            counter++;
-                        }    
-                    }
-                    
-                    List<String> nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, clonedSol.getSpurs( ), leftSide.getId( ), rightSide.getId( ));
-                    List<Node> reducedAllNodes = new ArrayList<Node>(network.getNetworkStructure( ).getNodes( ).getNode( ));
-                    List<Node> origAllNode = network.getNetworkStructure( ).getNodes( ).getNode( );
+                    List<String> nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, spurs, null,
+                                    new String[]{leftNode.getId( ), rightNode.getId( )});
+                    List<Node> reducedAllNodes = new ArrayList<Node>(allNetworkNodes);
                     for(int j=0; j<nodesToRemove.size( ); j++)
                     {
-                        Node currentNode = QaRsapUtils.getNodeById( nodesToRemove.get(j), origAllNode);
+                        Node currentNode = QaRsapUtils.getNodeById( nodesToRemove.get(j), allNetworkNodes);
                         reducedAllNodes.remove( currentNode );
                     }
-                        
-                    Dijkstra dijkstra = new Dijkstra();
-                    TreeMap<String, DijkstraNode> returnedNodes =  dijkstra.runDijkstra( leftSide, rightSide, 
+                    
+                    //Dijkstra dijkstra = new Dijkstra();
+                    List<DijkstraNode> returnedNodes =  dijkstra.runDijkstra( leftNode, rightNode, 
                                             reducedAllNodes, 
                                             nodeAdjacencies.reducedClone(nodesToRemove));
                     
-                    if(returnedNodes != null)
+                    if(returnedNodes != null && returnedNodes.size( ) == 1)
                     {
-                        String key = returnedNodes.firstKey( );
-                        DijkstraNode returnedNode = returnedNodes.get( key );
-                        
+                        DijkstraNode returnedNode = returnedNodes.get(0);
                         List<String> pathList = returnedNode.getPathFromRoot( );
+                      
                         for(int j=0; j<pathList.size( )-1; j++)
                         {
-                            tertiaryRing.getNodes( ).add( i+j, QaRsapUtils.getNodeById( pathList.get( j ), network.getNetworkStructure( ).getNodes( ).getNode( )));
-                        }
+                            tertiaryRing.getNodes( ).add((i+1)+j, QaRsapUtils.getNodeById( pathList.get( j ), allNetworkNodes));
+                        } 
                     }
                     else
                     {
                         //Failed to find path
                         clonedSol.setTertiaryRing( null );
                         SolutionGenerator solGenerator = new SolutionGenerator( network, nodeAdjacencies );
-                        List<Node> tempNodeList = new ArrayList<Node>(network.getNetworkStructure( ).getNodes( ).getNode());
-                        List<Spur> spurs = clonedSol.getSpurs();
-                        for(Spur spur : spurs)
-                        {
-                            tempNodeList.remove(spur.getSpurNode());
-                        }
-                        tertiaryRing = solGenerator.generateTertiaryRing( clonedSol.getSpurs( ), clonedSol.getLocalrings( ), tempNodeList );
+                        tertiaryRing = solGenerator.generateTertiaryRing(spurs, localRings);
                         if(tertiaryRing!=null)
                         {
                              clonedSol.setTertiaryRing(tertiaryRing);
+                             return clonedSol;
                         }
                         else
                         {
-                            return sol; //Cannot complete search, return original unchanged sol.
-                        }
-                    }
-                }               
+                            System.out.println("Failed to genrerate new sol, Returning original");
+                            return sol; //Cannot complete search, return original unchanged solution to avoid corruption.
+                        }  
+                    }     
+                }
             }
-        } 
-        boolean solutionFound = false;
+        }
+        //Chcek now if at least one node from the removed ring is back on the tertiary ring
+        boolean initRingReconnnected = false;
         for(Node node : initRing.getNodes( ))
         {
             if(QaRsapUtils.isNodeOnRing( node, tertiaryRing ))
             {
-                solutionFound = true;
+                initRingReconnnected = true;
                 break;
             }
         }
-        if(!solutionFound)
+        if(initRingReconnnected) //We know we have at least 2 nodes. we can reform complete ring
         {
-            boolean succeeded = addLocalRingToTertiary(tertiaryRing, initRing, rand, clonedSol.getSpurs( ));  
-            if(!succeeded)
+            if(tertiaryRing.getSize( ) == 2)
+            {
+                tertiaryRing = reconnect2NodeTertiaryRingbyDijkstra( tertiaryRing, spurs);
+                if(tertiaryRing == null)
+                {
+                    clonedSol.setTertiaryRing( null );
+                    SolutionGenerator solGenerator = new SolutionGenerator( network, nodeAdjacencies );
+                    tertiaryRing = solGenerator.generateTertiaryRing( spurs, localRings);
+                    if(tertiaryRing!=null)
+                    {
+                         clonedSol.setTertiaryRing(tertiaryRing);
+                         return clonedSol;
+                    }
+                    else
+                    {
+                        return sol; //Cannot complete search, return original unchanged solution to avoid corruption.
+                    }  
+                }
+            }
+            else
+            {
+                //Complete the ring
+                List<String> nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, spurs,
+                                null, new String[]{tertiaryRing.getSpecificNodeName(0), tertiaryRing.getSpecificNodeName(tertiaryRing.getSize( )-1)});
+                List<Node> reducedAllNodes = new ArrayList<Node>(allNetworkNodes);
+                List<Node> origAllNode = network.getNetworkStructure( ).getNodes( ).getNode( );
+                for(int i=0; i<nodesToRemove.size( ); i++)
+                {
+                    Node thisNode = QaRsapUtils.getNodeById( nodesToRemove.get(i), origAllNode);
+                    reducedAllNodes.remove( thisNode );
+                }
+                //call dijsktra
+                List<DijkstraNode> returnedNodes = dijkstra.runDijkstra( tertiaryRing.getSpecificNode(tertiaryRing.getSize( )-1),
+                                          tertiaryRing.getSpecificNode( 0),
+                                          reducedAllNodes, 
+                                          nodeAdjacencies.reducedClone(nodesToRemove));
+                  
+                  if(returnedNodes != null && returnedNodes.size( ) == 1)
+                  {
+                      DijkstraNode returnedNode = returnedNodes.get(0);
+                      for(String nodeName : returnedNode.getPathFromRoot( ))
+                      {
+                          tertiaryRing.getNodes( ).add(QaRsapUtils.getNodeById( nodeName, network.getNetworkStructure( ).getNodes( ).getNode( ) ));
+                      }
+                  }
+                  else
+                  {
+                      clonedSol.setTertiaryRing( null );
+                      SolutionGenerator solGenerator = new SolutionGenerator( network, nodeAdjacencies );
+                      tertiaryRing = solGenerator.generateTertiaryRing( spurs, localRings );
+                      if(tertiaryRing!=null)
+                      {
+                           clonedSol.setTertiaryRing(tertiaryRing);
+                           return clonedSol;
+                      }
+                      else
+                      {
+                          return sol; //Cannot complete search, return original unchanged solution to avoid corruption.
+                      }  
+                  }                 
+            }     
+        }
+        else //We need to reinsert the disconnected ring first
+        {
+            if(tertiaryRing.getSize( ) == 1)
             {
                 clonedSol.setTertiaryRing( null );
                 SolutionGenerator solGenerator = new SolutionGenerator( network, nodeAdjacencies );
-                List<Node> tempNodeList = new ArrayList<Node>(network.getNetworkStructure( ).getNodes( ).getNode());
-                List<Spur> spurs = clonedSol.getSpurs();
-                for(Spur spur : spurs)
-                {
-                    tempNodeList.remove(spur.getSpurNode());
-                }
-                tertiaryRing = solGenerator.generateTertiaryRing( clonedSol.getSpurs( ), clonedSol.getLocalrings( ), tempNodeList );
+                tertiaryRing = solGenerator.generateTertiaryRing( spurs, localRings );
                 if(tertiaryRing!=null)
                 {
-                     clonedSol.setTertiaryRing(tertiaryRing);
+                     clonedSol.setTertiaryRing(tertiaryRing); 
+                     return clonedSol;
                 }
                 else
                 {
-                    return sol; //Cannot complete search, return original unchanged sol.
-                }
+                    return sol; //Cannot complete search, return original unchanged solution to avoid corruption.
+                }                  
             }
+            else
+            {
+                //call add to local ring
+                boolean success = addLocalRingToTertiary( tertiaryRing, initRing, rand, spurs);
+                if(!success)
+                {
+                    clonedSol.setTertiaryRing( null );
+                    SolutionGenerator solGenerator = new SolutionGenerator( network, nodeAdjacencies );
+                    tertiaryRing = solGenerator.generateTertiaryRing( spurs, localRings);
+                    if(tertiaryRing!=null)
+                    {
+                        clonedSol.setTertiaryRing(tertiaryRing);  
+                        return clonedSol;
+                    }
+                    else
+                    {
+                        return sol; //Cannot complete search, return original unchanged solution to avoid corruption.
+                    }   
+                }
+            }       
         }
+        //Validate soluton
+        boolean valid1 = clonedSol.validate(nodeAdjacencies, networkNodes.size( ));
+        if(!valid1)
+        {
+            System.out.println("ERROR TERTIARY RING SEARCH: SOLUTION NOT VALID");
+        }
+        
         return clonedSol;
     }
-    
+        
+        
+        
+        
+        
+        
+        
+//        
+//        //If only one node remains, find shortest path to get at least two nodes in the tertiary ring
+//        if(tertiaryRing.getSize( ) == 1)
+//        {
+//            Ring currentRing = QaRsapUtils.getRingByNode( tertiaryRing.getSpecificNode(0), clonedSol.getLocalrings( ) );
+//                        
+//            //call dijsktra
+//            List<DijkstraNode> returnedNodes = dijkstra.runDijkstra(tertiaryRing.getSpecificNode(0), null, allNetworkNodes, 
+//                                    nodeAdjacencies);
+//            
+//            DijkstraNode bestRightChoice = null;
+//            if(returnedNodes != null && returnedNodes.size( ) > 0)
+//            {   
+//                for(int i=0; i<returnedNodes.size( ); i++)
+//                {
+//                    DijkstraNode dn = returnedNodes.get(i);
+//                    Node closestNode = QaRsapUtils.getNodeById( dn.getNodeName( ), allNetworkNodes);
+//                    if(QaRsapUtils.isNodeOnRing( closestNode, currentRing ))
+//                        continue;
+//                    else
+//                    {
+//                        bestRightChoice = dn;
+//                        //As they are ordered, we have found the closest on another ring
+//                        break;
+//                    }
+//                }
+//                for(String nodeName : bestRightChoice.getPathFromRoot( ))
+//                {
+//                    tertiaryRing.getNodes( ).add(QaRsapUtils.getNodeById( nodeName, allNetworkNodes));
+//                }
+//            }
+//            else
+//            {
+//               //No path found. No solution possible  
+//                return null;
+//            }
+//        }
+//        //Ensure all remaining node in tertiary ring are connected
+//        for(int i=0; i<tertiaryRing.getSize( )-1; i++)
+//        {
+//            Node leftNode = tertiaryRing.getSpecificNode(0);
+//            Node rightNode = tertiaryRing.getSpecificNode(1);
+//            if(!QaRsapUtils.isAdj(leftNode.getId( ), nodeAdjacencies.getAdjList( rightNode.getId( ))))
+//            {
+//                List<String> nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, clonedSol.getSpurs( ), null,
+//                                new String[]{leftNode.getId( ), rightNode.getId( )});
+//                List<Node> reducedAllNodes = new ArrayList<Node>(allNetworkNodes);
+//                for(int j=0; j<nodesToRemove.size( ); j++)
+//                {
+//                    Node currentNode = QaRsapUtils.getNodeById( nodesToRemove.get(j), allNetworkNodes);
+//                    reducedAllNodes.remove( currentNode );
+//                }
+//                    
+//                //Dijkstra dijkstra = new Dijkstra();
+//                List<DijkstraNode> returnedNodes =  dijkstra.runDijkstra( leftNode, rightNode, 
+//                                        reducedAllNodes, 
+//                                        nodeAdjacencies.reducedClone(nodesToRemove));
+//                if(returnedNodes != null && returnedNodes.size( ) == 1)
+//                {
+//                    DijkstraNode returnedNode = returnedNodes.get(0);
+//                    
+//                    List<String> pathList = returnedNode.getPathFromRoot( );
+//                    int offset=0;
+//                    for(int j=0; j<pathList.size( )-1; j++)
+//                    {
+//                        tertiaryRing.getNodes( ).add((j+1)+offset, QaRsapUtils.getNodeById( pathList.get( j ), allNetworkNodes));
+//                        offset++;
+//                    } 
+//                }
+//                else
+//                {
+//                    //Failed to find path
+//                    clonedSol.setTertiaryRing( null );
+//                    SolutionGenerator solGenerator = new SolutionGenerator( network, nodeAdjacencies );
+//                    tertiaryRing = solGenerator.generateTertiaryRing( clonedSol.getSpurs( ), clonedSol.getLocalrings( ) );
+//                    if(tertiaryRing!=null)
+//                    {
+//                         clonedSol.setTertiaryRing(tertiaryRing);
+//                         return clonedSol;
+//                    }
+//                    else
+//                    {
+//                        return sol; //Cannot complete search, return original unchanged sol.
+//                    }  
+//                }     
+//            }
+//        }
+//        //If at this stage we still have only two node on tertiary ring, handle this by completing a ring of 3 nodes
+//        if(tertiaryRing.getSize( ) < 3)
+//        {
+//            //Complete the ring
+//            List<String> nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, clonedSol.getSpurs( ), null, 
+//                            new String[]{tertiaryRing.getSpecificNodeName(tertiaryRing.getSize( )-1)});
+//            List<Node> reducedAllNodes = new ArrayList<Node>(allNetworkNodes);
+//            for(int i=0; i<nodesToRemove.size( ); i++)
+//            {
+//                Node thisNode = QaRsapUtils.getNodeById( nodesToRemove.get(i), allNetworkNodes);
+//                reducedAllNodes.remove( thisNode );
+//            }
+//            //call dijsktra
+//            List<DijkstraNode> returnedNodes = dijkstra.runDijkstra( tertiaryRing.getSpecificNode(tertiaryRing.getSize( )-1),
+//                                      null,
+//                                      reducedAllNodes, 
+//                                      nodeAdjacencies.reducedClone(nodesToRemove));
+//
+//            if(returnedNodes != null)
+//            {
+//                double shorestDistance = Double.POSITIVE_INFINITY;
+//                DijkstraNode bestFirstNode = null;
+//                DijkstraNode bestSecondNode = null;
+//                for(int i=0; i<returnedNodes.size( ); i++ )
+//                {
+//                    DijkstraNode firstNode = returnedNodes.get(i);
+//                    Node node = QaRsapUtils.getNodeById( firstNode.getNodeName( ), allNetworkNodes );
+//                    if(!QaRsapUtils.isNodeOnRing( node, tertiaryRing ))
+//                    {
+//                        nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, clonedSol.getSpurs( ), null, 
+//                                        new String[]{tertiaryRing.getSpecificNodeName(0)});
+//                        reducedAllNodes = new ArrayList<Node>(allNetworkNodes);
+//                        for(int j=0; j<nodesToRemove.size( ); j++)
+//                        {
+//                            Node thisNode = QaRsapUtils.getNodeById( nodesToRemove.get(j), allNetworkNodes);
+//                            reducedAllNodes.remove( thisNode );
+//                        }
+//                        //call dijsktra
+//                        List<DijkstraNode> returnedNodes2 = dijkstra.runDijkstra(node,tertiaryRing.getSpecificNode(0),
+//                                                  reducedAllNodes, 
+//                                                  nodeAdjacencies.reducedClone(nodesToRemove));
+//                        if(returnedNodes2 != null && returnedNodes2.size( ) == 1)
+//                        {
+//                            DijkstraNode secondNode = returnedNodes2.get(0);
+//                            if(shorestDistance > firstNode.getDistanceToRoot( ) + secondNode.getDistanceToRoot( ))
+//                            {
+//                                shorestDistance = firstNode.getDistanceToRoot( ) + secondNode.getDistanceToRoot( );
+//                                bestFirstNode = firstNode;
+//                                bestSecondNode = secondNode;
+//                            }
+//                        }
+//                        else
+//                        {
+//                            //cannot find path back. Failed to build tertiray Ring
+//                            System.out.println("1) failed to build tertiary ring in perturbe tertiary search");
+//                            return sol;
+//                        }
+//                    }
+//                }
+//                //Add paths of both dijkstra nodes to complete the ring
+//                for(String nodeName : bestFirstNode.getPathFromRoot( ))
+//                {
+//                    tertiaryRing.getNodes( ).add(QaRsapUtils.getNodeById( nodeName, network.getNetworkStructure( ).getNodes( ).getNode( ) ));
+//                }
+//                for(String nodeName : bestSecondNode.getPathFromRoot( ))
+//                {
+//                    tertiaryRing.getNodes( ).add(QaRsapUtils.getNodeById( nodeName, network.getNetworkStructure( ).getNodes( ).getNode( ) ));
+//                }
+//            }
+//            else
+//            {
+//                //cannot find path back. Failed to build tertiary Ring
+//                System.out.println("1) failed to build tertiary ring in perturbe tertiary search");
+//                return sol;
+//            }
+//            
+//        }
+//        else
+//        {
+//            //connect the ring by joining the two end nodes
+//            Node firstNode = tertiaryRing.getSpecificNode( 0 );
+//            Node lastNode = tertiaryRing.getSpecificNode(tertiaryRing.getSize( )-1);
+//            if(QaRsapUtils.isAdj( firstNode.getId( ), nodeAdjacencies.getAdjList( lastNode.getId( ))))
+//            {
+//                tertiaryRing.addNode(firstNode);
+//            }
+//            else
+//            {
+//                List<String> nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, clonedSol.getSpurs( ), null,
+//                                new String[]{firstNode.getId( ), lastNode.getId( )});
+//                List<Node> reducedAllNodes = new ArrayList<Node>(allNetworkNodes);
+//                for(int j=0; j<nodesToRemove.size( ); j++)
+//                {
+//                    Node currentNode = QaRsapUtils.getNodeById( nodesToRemove.get(j), allNetworkNodes);
+//                    reducedAllNodes.remove( currentNode );
+//                }
+//                    
+//                //Dijkstra dijkstra = new Dijkstra();
+//                List<DijkstraNode> returnedNodes =  dijkstra.runDijkstra( lastNode, firstNode, 
+//                                        reducedAllNodes, 
+//                                        nodeAdjacencies.reducedClone(nodesToRemove));
+//                if(returnedNodes != null && returnedNodes.size( ) == 1)
+//                {
+//                    DijkstraNode returnedNode = returnedNodes.get(0);
+//                    
+//                    List<String> pathList = returnedNode.getPathFromRoot( );
+//                    for(int j=0; j<pathList.size( ); j++)
+//                    {
+//                        tertiaryRing.getNodes( ).add(QaRsapUtils.getNodeById( pathList.get( j ), allNetworkNodes));
+//                    } 
+//                }
+//                else
+//                {
+//                    //Failed to find path
+//                    clonedSol.setTertiaryRing( null );
+//                    SolutionGenerator solGenerator = new SolutionGenerator( network, nodeAdjacencies );
+//                    tertiaryRing = solGenerator.generateTertiaryRing( clonedSol.getSpurs( ), clonedSol.getLocalrings( ) );
+//                    if(tertiaryRing!=null)
+//                    {
+//                         clonedSol.setTertiaryRing(tertiaryRing);
+//                         return clonedSol;
+//                    }
+//                    else
+//                    {
+//                        return sol; //Cannot complete search, return original unchanged sol.
+//                    }  
+//                }     
+//                
+//            }
+//            
+//        }
+//            
+//        boolean solutionFound = false;
+//        for(Node node : initRing.getNodes( ))
+//        {
+//            if(QaRsapUtils.isNodeOnRing( node, tertiaryRing ))
+//            {
+//                solutionFound = true;
+//                break;
+//            }
+//        }
+//        if(!solutionFound)
+//        {
+//            boolean succeeded = addLocalRingToTertiary(tertiaryRing, initRing, rand, clonedSol.getSpurs( ));  
+//            if(!succeeded)
+//            {
+//                clonedSol.setTertiaryRing( null );
+//                SolutionGenerator solGenerator = new SolutionGenerator( network, nodeAdjacencies );
+//                List<Node> tempNodeList = new ArrayList<Node>(network.getNetworkStructure( ).getNodes( ).getNode());
+//                List<Spur> spurs = clonedSol.getSpurs();
+//                for(Spur spur : spurs)
+//                {
+//                    tempNodeList.remove(spur.getSpurNode());
+//                }
+//                tertiaryRing = solGenerator.generateTertiaryRing( clonedSol.getSpurs( ), clonedSol.getLocalrings( ));
+//                if(tertiaryRing!=null)
+//                {
+//                     clonedSol.setTertiaryRing(tertiaryRing);
+//                     return clonedSol;
+//                }
+//                else
+//                {
+//                    return sol; //Cannot complete search, return original unchanged sol.
+//                }
+//            }
+//        }
+  
+    private Ring reconnect2NodeTertiaryRingbyDijkstra(Ring tertiaryRing, List<Spur> clonedSolSpurs)
+    {
+        Dijkstra dijkstra = new Dijkstra();
+       //Complete the ring
+        List<String> nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, clonedSolSpurs, null, 
+                        new String[]{tertiaryRing.getSpecificNodeName(tertiaryRing.getSize( )-1)});
+        List<Node> reducedAllNodes = new ArrayList<Node>(networkNodes);
+        for(int i=0; i<nodesToRemove.size( ); i++)
+        {
+            Node thisNode = QaRsapUtils.getNodeById( nodesToRemove.get(i), networkNodes);
+            reducedAllNodes.remove( thisNode );
+        }
+        //call dijsktra
+        List<DijkstraNode> returnedNodes = dijkstra.runDijkstra( tertiaryRing.getSpecificNode(tertiaryRing.getSize( )-1),
+                                  null,
+                                  reducedAllNodes, 
+                                  nodeAdjacencies.reducedClone(nodesToRemove));
+
+        if(returnedNodes != null)
+        {
+            double shorestDistance = Double.POSITIVE_INFINITY;
+            DijkstraNode bestFirstNode = null;
+            DijkstraNode bestSecondNode = null;
+            for(int i=0; i<returnedNodes.size( ); i++ )
+            {
+                DijkstraNode firstNode = returnedNodes.get(i);
+                Node node = QaRsapUtils.getNodeById( firstNode.getNodeName( ), networkNodes );
+                if(!QaRsapUtils.isNodeOnRing( node, tertiaryRing ))
+                {
+                    nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, clonedSolSpurs, null, 
+                                    new String[]{tertiaryRing.getSpecificNodeName(0)});
+                    reducedAllNodes = new ArrayList<Node>(networkNodes);
+                    for(int j=0; j<nodesToRemove.size( ); j++)
+                    {
+                        Node thisNode = QaRsapUtils.getNodeById( nodesToRemove.get(j), networkNodes);
+                        reducedAllNodes.remove( thisNode );
+                    }
+                    //call dijsktra
+                    List<DijkstraNode> returnedNodes2 = dijkstra.runDijkstra(node,tertiaryRing.getSpecificNode(0),
+                                              reducedAllNodes, 
+                                              nodeAdjacencies.reducedClone(nodesToRemove));
+                    if(returnedNodes2 != null && returnedNodes2.size( ) == 1)
+                    {
+                        DijkstraNode secondNode = returnedNodes2.get(0);
+                        if(shorestDistance > firstNode.getDistanceToRoot( ) + secondNode.getDistanceToRoot( ))
+                        {
+                            shorestDistance = firstNode.getDistanceToRoot( ) + secondNode.getDistanceToRoot( );
+                            bestFirstNode = firstNode;
+                            bestSecondNode = secondNode;
+                        }
+                    }
+                    else
+                    {
+                        //cannot find path back. Failed to build tertiray Ring
+                        System.out.println("1) failed to build tertiary ring in perturbe tertiary search");
+                        return null;
+                    }
+                }
+            }
+            if(bestFirstNode == null || bestSecondNode == null)
+            {
+                //cannot find path back. Failed to build tertiary Ring
+                System.out.println("1) failed to build tertiary ring in perturbe tertiary search");
+                return null;
+            }
+            //Add paths of both dijkstra nodes to complete the ring
+            for(String nodeName : bestFirstNode.getPathFromRoot( ))
+            {
+                tertiaryRing.getNodes( ).add(QaRsapUtils.getNodeById( nodeName, networkNodes));
+            }
+            for(String nodeName : bestSecondNode.getPathFromRoot( ))
+            {
+                tertiaryRing.getNodes( ).add(QaRsapUtils.getNodeById( nodeName, networkNodes));
+            }
+        }   
+        return tertiaryRing;
+    }
 
     private boolean addLocalRingToTertiary(Ring tertiaryRing, Ring initRing, Random rand, List<Spur> spurs)
     {
@@ -729,17 +1109,17 @@ public class NeighbourGenerator
         }
         
         Dijkstra dijkstra = new Dijkstra();
-        TreeMap<String, DijkstraNode> returnedNodes1 =  dijkstra.runDijkstra( randNode, null, 
+        List<DijkstraNode> returnedNodes1 =  dijkstra.runDijkstra( randNode, null, 
                                 network.getNetworkStructure( ).getNodes( ).getNode( ), 
                                 nodeAdjacencies );
-       Iterator<String> iter = returnedNodes1.keySet( ).iterator( );
+       Iterator<DijkstraNode> iter = returnedNodes1.iterator( );
        double closest = Double.POSITIVE_INFINITY;
        Node closestNode = null;
+       DijkstraNode closestDNode = null;
        DijkstraNode dn = null;
        while(iter.hasNext( ))
        {
-           String thisKey = iter.next( );
-           dn = returnedNodes1.get( thisKey );
+           dn = iter.next( );
            Node node = QaRsapUtils.getNodeById( dn.getNodeName( ), network.getNetworkStructure( ).getNodes( ).getNode( ) );
            if(QaRsapUtils.isNodeOnRing( node, tertiaryRing ))
            {
@@ -747,6 +1127,7 @@ public class NeighbourGenerator
                {
                    closest = dn.getDistanceToRoot( );
                    closestNode = node;
+                   closestDNode = dn;
                } 
            }    
        }
@@ -762,10 +1143,17 @@ public class NeighbourGenerator
         ****************************************************/
        if(posOnTRing == 0)
        {
-           leftside = tertiaryRing.getNodes( ).get( tertiaryRing.getSize( )-2);
-           rightSide = tertiaryRing.getNodes( ).get(posOnTRing +1);
-           posLeftSide = tertiaryRing.getSize( )-2;
+           leftside = tertiaryRing.getNodes( ).get( tertiaryRing.getSize( )-1);
+           rightSide = tertiaryRing.getNodes( ).get(posOnTRing + 1);
+           posLeftSide = tertiaryRing.getSize( )-1;
            posRightSide = posOnTRing +1;
+       }
+       else if(posOnTRing == tertiaryRing.getSize( )-1)
+       {
+           leftside = tertiaryRing.getNodes( ).get(posOnTRing-1);
+           rightSide = tertiaryRing.getNodes( ).get(0);
+           posLeftSide = posOnTRing-1;
+           posRightSide = 0;
        }
        else
        {
@@ -779,49 +1167,58 @@ public class NeighbourGenerator
        //Exclude all other tertiray and spur nodes
        DijkstraNode sideToInsert = null;
        int sideSelected = -1; //-1=none selected, 0 = left select, 1 = right selected
-       nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, spurs, leftside.getId(), null);
+       nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, spurs, null, new String[]{leftside.getId()});
+       //We need to remove the node that the other search found
+       for(int k=0; k<closestDNode.getPathFromRoot( ).size( )-1; k++)
+       {
+           nodesToRemove.add(closestDNode.getPathFromRoot( ).get(k));
+       }
        reducedAllNodes = new ArrayList<Node>(network.getNetworkStructure( ).getNodes( ).getNode( ));
        for(int j=0; j<nodesToRemove.size( ); j++)
        {
            Node currentNode = QaRsapUtils.getNodeById( nodesToRemove.get(j), origAllNode);
            reducedAllNodes.remove( currentNode );
        }
-       TreeMap<String, DijkstraNode> returnedNodes2 =  dijkstra.runDijkstra( leftside, randNode, 
+       List<DijkstraNode> returnedNodes2 =  dijkstra.runDijkstra( leftside, randNode, 
                                reducedAllNodes, 
                                nodeAdjacencies.reducedClone(nodesToRemove) );
-       if(returnedNodes2!= null)
+       if(returnedNodes2!= null && returnedNodes2.size( ) == 1)
        {
-           String key = returnedNodes2.firstKey( );
-           sideToInsert = returnedNodes2.get( key );
+           sideToInsert = returnedNodes2.get(0);
            sideSelected = 0;
        }
-       
+
        //Call dijkstra for rightSide node
        //Exclude all other tertiary and spur nodes
-       nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, spurs, rightSide.getId(), null);
+       nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, spurs, null, new String[]{rightSide.getId()});
+       //We need to remove the node that the other search found
+       for(int k=0; k<closestDNode.getPathFromRoot( ).size( )-1; k++)
+       {
+           nodesToRemove.add(closestDNode.getPathFromRoot( ).get(k));
+       }
+       
        reducedAllNodes = new ArrayList<Node>(network.getNetworkStructure( ).getNodes( ).getNode( ));
        for(int j=0; j<nodesToRemove.size( ); j++)
        {
            Node currentNode = QaRsapUtils.getNodeById( nodesToRemove.get(j), origAllNode);
            reducedAllNodes.remove( currentNode );
        }
-       TreeMap<String, DijkstraNode> returnedNodes3 =  dijkstra.runDijkstra( randNode, rightSide, 
+       List<DijkstraNode> returnedNodes3 =  dijkstra.runDijkstra( randNode, rightSide, 
                                reducedAllNodes, 
                                nodeAdjacencies.reducedClone(nodesToRemove) );
-       if(returnedNodes3!= null)
+       if(returnedNodes3!= null && returnedNodes3.size( ) == 1)
        {
-           String key = returnedNodes3.firstKey( );
            if(sideToInsert != null)
            {
-               if(sideToInsert.getDistanceToRoot( ) > returnedNodes3.get( key ).getDistanceToRoot( ))
+               if(sideToInsert.getDistanceToRoot( ) > returnedNodes3.get( 0 ).getDistanceToRoot( ))
                {
-                   sideToInsert = returnedNodes3.get( key );
+                   sideToInsert = returnedNodes3.get( 0 );
                    sideSelected = 1;
                }
            }
-           else if(returnedNodes3.get( key ) != null)
+           else
            {
-               sideToInsert = returnedNodes3.get( key );
+               sideToInsert = returnedNodes3.get( 0 );
                sideSelected = 1;
            }
        }
@@ -836,23 +1233,20 @@ public class NeighbourGenerator
                    tertiaryRing.getNodes( ).add((posLeftSide+1)+offset, QaRsapUtils.getNodeById( nodeName, network.getNetworkStructure( ).getNodes( ).getNode( ) ));
                    offset++;
                }
-               for(int k=0; k<dn.getPathFromRoot( ).size( )-1; k++)
+               for(int k=0; k<closestDNode.getPathFromRoot( ).size( )-1; k++)
                {
-                   String thisName = dn.getPathFromRoot( ).get( k );
-                   tertiaryRing.getNodes( ).add((posLeftSide+1)+offset, QaRsapUtils.getNodeById( thisName, network.getNetworkStructure( ).getNodes( ).getNode( ) ));
+                   String thisName = closestDNode.getPathFromRoot( ).get( k );
+                   Node thisNode = QaRsapUtils.getNodeById( thisName, network.getNetworkStructure( ).getNodes( ).getNode( ));
+                   tertiaryRing.getNodes( ).add((posLeftSide+1)+offset, thisNode);
                    offset++;
-               }
-               if(tertiaryRing.getSpecificNode(0) != tertiaryRing.getSpecificNode(tertiaryRing.getSize( )-1))
-               {
-                   tertiaryRing.getNodes().add(tertiaryRing.getSize( ),tertiaryRing.getSpecificNode(0) );
-               }  
+               } 
            }
            else if(sideSelected == 1) //Rightside selected
            {
                int offset=0;
-               for(int k=dn.getPathFromRoot( ).size( )-2; k>=0; k--)
+               for(int k=closestDNode.getPathFromRoot( ).size( )-2; k>=0; k--)
                {
-                   String thisName = dn.getPathFromRoot( ).get( k );
+                   String thisName = closestDNode.getPathFromRoot( ).get( k );
                    tertiaryRing.getNodes( ).add((posOnTRing+1)+offset, QaRsapUtils.getNodeById( thisName, network.getNetworkStructure( ).getNodes( ).getNode( ) ));
                    offset++;
                }
@@ -860,16 +1254,53 @@ public class NeighbourGenerator
                offset++;
                for(int k=0; k<sideToInsert.getPathFromRoot( ).size( )-1; k++)
                {
-                   String thisName = dn.getPathFromRoot( ).get( k );
+                   String thisName = sideToInsert.getPathFromRoot( ).get( k ); 
                    tertiaryRing.getNodes( ).add((posOnTRing+1)+offset, QaRsapUtils.getNodeById( thisName, network.getNetworkStructure( ).getNodes( ).getNode( ) ));
                    offset++;
                }
-               if(tertiaryRing.getSpecificNode(0) != tertiaryRing.getSpecificNode(tertiaryRing.getSize( )-1))
-               {
-                   tertiaryRing.getNodes().add(tertiaryRing.getSize( ),tertiaryRing.getSpecificNode(0) );
-               }  
            }
+           
            succeeded = true;
+           if(tertiaryRing.getSize( ) == 2)
+           {
+               tertiaryRing = reconnect2NodeTertiaryRingbyDijkstra( tertiaryRing, spurs);
+               if(tertiaryRing == null)
+               {
+                   succeeded = false;
+               }
+           }
+           else
+           {
+               //Complete the ring
+               nodesToRemove = QaRsapUtils.nodesToRemove(tertiaryRing, spurs, null, 
+                               new String[]{tertiaryRing.getSpecificNodeName(0), tertiaryRing.getSpecificNodeName(tertiaryRing.getSize( )-1)});
+               reducedAllNodes = new ArrayList<Node>(networkNodes);
+               origAllNode = network.getNetworkStructure( ).getNodes( ).getNode( );
+               for(int i=0; i<nodesToRemove.size( ); i++)
+               {
+                   Node thisNode = QaRsapUtils.getNodeById( nodesToRemove.get(i), origAllNode);
+                   reducedAllNodes.remove( thisNode );
+               }
+               //call dijsktra
+               List<DijkstraNode> returnedNodes = dijkstra.runDijkstra( tertiaryRing.getSpecificNode(tertiaryRing.getSize( )-1),
+                                         tertiaryRing.getSpecificNode( 0),
+                                         reducedAllNodes, 
+                                         nodeAdjacencies.reducedClone(nodesToRemove));
+                 
+                 if(returnedNodes != null && returnedNodes.size( ) == 1)
+                 {
+                     DijkstraNode returnedNode = returnedNodes.get(0);
+                     for(String nodeName : returnedNode.getPathFromRoot( ))
+                     {
+                         tertiaryRing.getNodes( ).add(QaRsapUtils.getNodeById( nodeName, network.getNetworkStructure( ).getNodes( ).getNode( ) ));
+                     }
+                 }
+                 else
+                 {
+                     //cannot find path back. Failed to build tertiray Ring
+                     succeeded = false;
+                 } 
+           }
        }
        else
        {
@@ -944,7 +1375,7 @@ public class NeighbourGenerator
                                 clonedSpiltCandidate.removeNode(firstNewRing.getSpecificNode(k));
                             }
                             
-                            firstNewRing.getNodes( ).add(firstNewRing.getNodes( ).get(i));
+                            firstNewRing.getNodes( ).add(firstNewRing.getNodes( ).get(0));
                             clonedSol.getLocalrings( ).add(firstNewRing);
                             
                             //The remainder is the second new ring
@@ -972,7 +1403,7 @@ public class NeighbourGenerator
                         tempNodeList.remove(spur.getSpurNode());
                     }
                     SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies);
-                    Ring tertiaryRing = solGenerator.generateTertiaryRing(clonedSol.getSpurs( ), clonedSol.getLocalrings(), tempNodeList);
+                    Ring tertiaryRing = solGenerator.generateTertiaryRing(clonedSol.getSpurs( ), clonedSol.getLocalrings());
                     if(tertiaryRing!=null)
                     {
                          clonedSol.setTertiaryRing(tertiaryRing);
@@ -985,12 +1416,14 @@ public class NeighbourGenerator
                 }
                 else
                 {
+                    Ring tertiaryRing = clonedSol.getTertiaryRing( );
+                                 
                     boolean firstRingConnected = false; //Connected to tertiary
                     boolean clonedSplitCandidateconnected = false; //Connected to tertiary
                     
                     for(Node node : firstNewRing.getNodes( ))
                     {
-                        if(QaRsapUtils.isNodeOnRing( node, clonedSol.getTertiaryRing( )))
+                        if(QaRsapUtils.isNodeOnRing( node, tertiaryRing))
                         {
                             firstRingConnected = true;
                             break;
@@ -998,25 +1431,144 @@ public class NeighbourGenerator
                     }
                     for(Node node : clonedSpiltCandidate.getNodes( ))
                     {
-                        if(QaRsapUtils.isNodeOnRing( node, clonedSol.getTertiaryRing( )))
+                        if(QaRsapUtils.isNodeOnRing( node, tertiaryRing))
                         {
                             clonedSplitCandidateconnected = true;
                             break;
                         }
                     }
+                    if(!firstRingConnected || !clonedSplitCandidateconnected)
+                    {
+                        //remove final node to aid reconnecting
+                        tertiaryRing.getNodes( ).remove(tertiaryRing.getSize( )-1); //This makes adding a disconnected node easier
+                    }
                     if(!firstRingConnected) 
                     {
-                        addLocalRingToTertiary(clonedSol.getTertiaryRing( ), firstNewRing, new Random(), clonedSol.getSpurs( ));  
+                        addLocalRingToTertiary(tertiaryRing, firstNewRing, new Random(), clonedSol.getSpurs( ));  
                     }
-                    
-                    if(!clonedSplitCandidateconnected) 
+                    else if(!clonedSplitCandidateconnected) 
                     {
-                        addLocalRingToTertiary(clonedSol.getTertiaryRing( ), clonedSpiltCandidate, new Random(), clonedSol.getSpurs( ));  
+                        addLocalRingToTertiary(tertiaryRing, clonedSpiltCandidate, new Random(), clonedSol.getSpurs( ));  
                     }
                 }
             }
         }
       
+        //Validate soluton
+        boolean valid = clonedSol.validate(nodeAdjacencies, networkNodes.size( ));
+        if(!valid)
+        {
+            System.out.println("ERROR SPLIT LOCAL RING SEARCH: SOLUTION NOT VALID");
+        }
+        
+        
+        return clonedSol;
+    }
+    
+    public Solution edgeInsertionSearch(Solution sol)
+    {
+
+        Solution clonedSol = sol.clone();
+        Random rand  = new Random();
+        
+        List<Ring> localRings = clonedSol.getLocalrings( );
+        List<Spur> spurs = clonedSol.getSpurs();
+        
+        //First try to eliminate spurs
+        if(spurs != null && spurs.size( ) > 1)
+        {
+            //pick a random spur
+            int randomSpur = rand.nextInt(spurs.size( ));
+            Spur firstSpur = spurs.get(randomSpur);
+            
+            List<AdjNode> spurAdjs = nodeAdjacencies.getAdjList( firstSpur.getSpurNode().getId());
+            for(int i=0; i<spurAdjs.size( ); i++)
+            {
+                AdjNode thisClosest = spurAdjs.get(i);
+                Node thisClosestNode = QaRsapUtils.getNodeById( thisClosest.getNodeName( ), networkNodes );
+                Ring closestRing = QaRsapUtils.getRingByNode( thisClosestNode, localRings );
+                if(closestRing != null && closestRing.getSize( ) < Constants.maxLocalRingSize-1)
+                {
+                    int positionOfClosestNode = findNodePosOnRing(closestRing, thisClosestNode);
+                    
+                    Node leftNode = null;
+                    Node rightNode = null;
+                    int posLeftNode = 0;
+                    int posRightNode = 0;
+                    if(positionOfClosestNode == 0)
+                    {
+                        leftNode = closestRing.getNodes( ).get((closestRing.getNodes( ).size( ))-2);
+                        rightNode = closestRing.getNodes( ).get(1);
+                        posLeftNode = (closestRing.getNodes( ).size( ))-2;
+                        posRightNode = positionOfClosestNode+1;
+                    }
+                    else
+                    {                      
+                        leftNode = closestRing.getNodes( ).get(positionOfClosestNode-1);
+                        rightNode = closestRing.getNodes( ).get(positionOfClosestNode+1); 
+                        posLeftNode = positionOfClosestNode-1;
+                        posRightNode =positionOfClosestNode+1;
+                    } 
+                    
+                    //Try leftSide first
+                    boolean operationComplete = false;
+                    List<AdjNode> leftNodeAdjs = nodeAdjacencies.getAdjList(leftNode.getId());
+                    for(int j=0; j<leftNodeAdjs.size( ); j++)
+                    {
+                        AdjNode current = leftNodeAdjs.get(j); //if this is chosen by below, it is the second spur
+                        Node currentNode = QaRsapUtils.getNodeById( current.getNodeName( ), networkNodes );
+                        if(QaRsapUtils.isNodeASpur( current.getNodeName( ), spurs ) && currentNode != firstSpur.getSpurNode( ))
+                        {
+                            if(QaRsapUtils.isAdj( current.getNodeName( ), spurAdjs ))
+                            {
+                                closestRing.getNodes( ).add( positionOfClosestNode, currentNode);
+                                closestRing.getNodes( ).add( positionOfClosestNode+1, firstSpur.getSpurNode());
+                                operationComplete = true;
+                                System.out.println("Edge insertion worked on left side." +  firstSpur.getSpurNode().getId( ));
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            continue;
+                        }
+                    }   
+                    if(operationComplete)
+                    {
+                        break;   
+                    }
+                    
+                    //Try Right Side next
+                    List<AdjNode> rightNodeAdjs = nodeAdjacencies.getAdjList(rightNode.getId());
+                    for(int j=0; j<rightNodeAdjs.size( ); j++)
+                    {
+                        AdjNode current = rightNodeAdjs.get(j); //if this is chosen by below, it is the second spur
+                        Node currentNode = QaRsapUtils.getNodeById( current.getNodeName( ), networkNodes );
+                        if(QaRsapUtils.isNodeASpur( current.getNodeName( ), spurs ))
+                        {
+                            if(QaRsapUtils.isAdj( current.getNodeName( ), spurAdjs ))
+                            {
+                                closestRing.getNodes( ).add( posRightNode, firstSpur.getSpurNode());
+                                closestRing.getNodes( ).add( posRightNode+1, currentNode);   
+                                operationComplete = true;
+                                System.out.println("Edge insertion worked on Right side." +  firstSpur.getSpurNode().getId( ));
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            continue;
+                        }
+                    } 
+                    if(operationComplete)
+                        break;
+                }
+                else
+                {
+                    continue;
+                }  
+            }   
+        }  
         return clonedSol;
     }
 

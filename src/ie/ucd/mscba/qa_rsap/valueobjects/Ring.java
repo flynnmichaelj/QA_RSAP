@@ -26,9 +26,10 @@ public class Ring extends SolutionElement
     public Ring clone()
     {
         Ring cloned = new Ring();
-        for(Node node : getNodes())
+        List<Node> nodes = getNodes();
+        for(int i=0; i<nodes.size( ); i++)
         {
-            cloned.getNodes().add(node);
+            cloned.getNodes().add(nodes.get(i));
         }   
         return cloned;
     }

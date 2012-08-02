@@ -13,7 +13,6 @@ package ie.ucd.mscba.qa_rsap;
 import ie.ucd.mscba.qa_rsap.filehandlers.InputFileHandler;
 import ie.ucd.mscba.qa_rsap.processor.NeighbourGenerator;
 import ie.ucd.mscba.qa_rsap.processor.SolutionGenerator;
-import ie.ucd.mscba.qa_rsap.ui.GraphView;
 import ie.ucd.mscba.qa_rsap.valueobjects.NodeAdjacencies;
 import ie.ucd.mscba.qa_rsap.valueobjects.OCC;
 import ie.ucd.mscba.qa_rsap.valueobjects.OCCChangeHolder;
@@ -38,8 +37,10 @@ public class QaRsapController
     {
         //Set a default file name if none exists
         if(fileName == null)
-            fileName = "resources/dfn-bwin.xml";
+            //fileName = "resources/dfn-bwin.xml";
             //fileName = "resources/atlanta.xml";
+            //fileName = "resources/newyork.xml";
+            fileName = "resources/germany50.xml";
        
         //===========================================================
         //(1)    Build Network Object representation from input file
@@ -67,21 +68,37 @@ public class QaRsapController
         Solution[] initialSolutions = new Solution[Constants.NUM_SEARCHES];
         for(int i=0; i<Constants.NUM_SEARCHES; i++ )
         {
+            
             Solution thisInitSol  = null;
             int initSolCounter = 1;
             while(thisInitSol == null && initSolCounter <= 10)
             {
                 System.out.println("Generate Initital Soluotion: ATTEMPT:" + initSolCounter);
                 thisInitSol = qaRsapProcessor.getInitialSolution();
+                if(thisInitSol != null)
+                {
+                    //Validate soluton
+                    boolean valid = thisInitSol.validate(nodeAdjacencies, networkNodes.size( ));
+                    if(!valid)
+                    {
+                        System.out.println("ERROR: INIT SOLUTION NOT VALID");
+                        thisInitSol = null;
+                    }
+                }
                 initSolCounter++;
             }
-            initialSolutions[i] = thisInitSol; //TODO
-            perSearchBest[i] = thisInitSol;
-            System.out.println( "============= INIT SOL =============" );
+            if(thisInitSol != null)
+            {
+                initialSolutions[i] = thisInitSol; //TODO
+                perSearchBest[i] = thisInitSol;
+            }
+            else
+                i--;
+            /*System.out.println( "============= INIT SOL =============" );
             thisInitSol.printLocalRing( );
             thisInitSol.printSpurs( );
             thisInitSol.printTertiaryRing( );
-            System.out.println( "============= END INIT SOL =============" );
+            System.out.println( "============= END INIT SOL =============" );*/
         }
         
         //=====================================
@@ -171,8 +188,8 @@ public class QaRsapController
         System.out.println( "Cost:" + overAllBestSol.getTotalCost( ) );
         System.out.println( "============= Overall Best Sol  =============" );
 
-        GraphView view = new GraphView();
-        view.drawGraph(overAllBestSol);
+        //GraphView view = new GraphView();
+        //view.drawGraph(overAllBestSol);
     }
     
     private void anneal(List<Link> networkLinks, Solution[] currrentSliceSolutions, 
@@ -203,8 +220,8 @@ public class QaRsapController
                 for (int k = 0; k<Constants.TROTTER_NUMBER ; k++)           // loop over Trotter slices      
                 {
                     //System.out.println("Entered Trotter slice: " + k + "For nmcs: " + istep);
-                    Solution bestSolSoFar = currrentSliceSolutions[k];                
-                    Solution vnsResult = null;
+                    //Solution bestSolSoFar = currrentSliceSolutions[k];                
+                    Solution vnsResult = currrentSliceSolutions[k];
             
                     //Pick the neighbourhood by probability.
                     double probRunBytimes = Math.random( );
@@ -226,28 +243,35 @@ public class QaRsapController
                     Solution nsSolHolder = null;
                     if(probPickNeighbourhood <= Constants.prob_LR_DeleteInsert)
                     {
-                        vnsResult = invokeVNS(bestSolSoFar,runBytimes, 1 , networkLinks, ng, nodeAdjacencies);
+                        vnsResult = invokeVNS(currrentSliceSolutions[k],runBytimes, 1 , networkLinks, ng, nodeAdjacencies);
                     }
                     else if((probPickNeighbourhood > Constants.prob_LR_DeleteInsert) && (probPickNeighbourhood < Constants.prob_LR_NodeSwap))
                     {
-                        if(bestSolSoFar.getLocalrings( ).size( ) > 1)
+                        if(currrentSliceSolutions[k].getLocalrings( ).size( ) > 1)
                         {
-                            vnsResult = invokeVNS(bestSolSoFar,runBytimes, 2 , networkLinks, ng, nodeAdjacencies);
+                            vnsResult = invokeVNS(currrentSliceSolutions[k],runBytimes, 2 , networkLinks, ng, nodeAdjacencies);
                         }
                     }
                     else if((probPickNeighbourhood > Constants.prob_LR_NodeSwap) && (probPickNeighbourhood < Constants.prob_LR_DeleteSmallRing))
                     {
-                        vnsResult = invokeVNS(bestSolSoFar,runBytimes, 3 , networkLinks, ng, nodeAdjacencies); 
+                        vnsResult = invokeVNS(currrentSliceSolutions[k],runBytimes, 3 , networkLinks, ng, nodeAdjacencies); 
                     }
                     else if((probPickNeighbourhood > Constants.prob_LR_DeleteSmallRing) && (probPickNeighbourhood < Constants.prob_LR_Split))
                     {
-                        vnsResult = invokeVNS(bestSolSoFar,runBytimes, 4 , networkLinks, ng, nodeAdjacencies);  
+                        vnsResult = invokeVNS(currrentSliceSolutions[k],runBytimes, 4 , networkLinks, ng, nodeAdjacencies);  
                     }
-                    else if((probPickNeighbourhood > Constants.prob_LR_Split) && (probPickNeighbourhood < Constants.prob_TR_perturbe))
+                    else if((probPickNeighbourhood > Constants.prob_LR_Split) && (probPickNeighbourhood < Constants.prob_LR_InsertEdge))
                     {
-                        if(bestSolSoFar.getTertiaryRing( ) != null)
+                        if(currrentSliceSolutions[k].getSpurs( ) != null && currrentSliceSolutions[k].getSpurs( ).size( ) > 1)
                         {
-                            vnsResult = invokeVNS(bestSolSoFar,runBytimes, 5 , networkLinks, ng, nodeAdjacencies);
+                            vnsResult = invokeVNS(currrentSliceSolutions[k], runBytimes, 5 , networkLinks, ng, nodeAdjacencies);
+                        }          
+                    }
+                    else if((probPickNeighbourhood > Constants.prob_LR_InsertEdge) && (probPickNeighbourhood < Constants.prob_TR_perturbe))
+                    {
+                        if(currrentSliceSolutions[k].getTertiaryRing( ) != null)
+                        {
+                            vnsResult = invokeVNS(currrentSliceSolutions[k],runBytimes, 6 , networkLinks, ng, nodeAdjacencies);
                         }          
                     }
                     
@@ -257,12 +281,14 @@ public class QaRsapController
                     bestSolSoFar.printTertiaryRing( );
                     System.out.println( "============= END VNS SOL =============" );*/
                     
-                    VnsDistDiff = vnsResult.getTotalCost() - bestSolSoFar.getTotalCost( );
-                    if(VnsDistDiff > 0.0)
+                    VnsDistDiff = vnsResult.getTotalCost() - currrentSliceSolutions[k].getTotalCost( );
+                    double scaledDiff = VnsDistDiff*nodeAdjacencies.getScaleRatio( );
+                    
+                    if(scaledDiff > 0.0)
                     {
                         String h = "dsdfs";
                     }
-                    else if(VnsDistDiff < 0.0)
+                    else if(scaledDiff < 0.0)
                     {
                         String h= "sdsdf";
                     }
@@ -271,12 +297,12 @@ public class QaRsapController
                     OCCChangeHolder changHolder = null;
                     if(Constants.TROTTER_NUMBER != 1) 
                     {
-                       changHolder = occ.occChange( k, bestSolSoFar, vnsResult );
+                       changHolder = occ.occChange( k, currrentSliceSolutions[k], vnsResult );
                        change = changHolder.getChangem( ) + changHolder.getChangep( );
                     } 
                     
                     double decisionFactor = Math.random( );
-                    if(decisionFactor < Math.pow( 1.05, (-beta*VnsDistDiff - betaTrotter*(double)change))) 
+                    if(decisionFactor < Math.pow( Math.E, (-beta*scaledDiff - betaTrotter*(double)change))) 
                     {
                         currrentSliceSolutions[k] = vnsResult;
                         
@@ -293,7 +319,7 @@ public class QaRsapController
                                 occ.getDiffOcc( )[k]   = occ.getDiffOcc( )[k]   + changHolder.getChangep( );
                             }
                         }
-                        if(perSearchBest[iSearch].getTotalCost( ) < vnsResult.getTotalCost( ))
+                        if(perSearchBest[iSearch].getTotalCost( ) > vnsResult.getTotalCost( ))
                         {
                             perSearchBest[iSearch] = vnsResult;
                         }
@@ -304,11 +330,12 @@ public class QaRsapController
         }
         
         acc = acc/((double)nmcs*(double)Constants.TROTTER_NUMBER);  
+        System.out.println("decision acceptance:" + acc);
     }
     
     private Solution invokeVNS(Solution inputSol, long runTimes, int neighbourhoodSearch, List<Link> networkLinks, NeighbourGenerator ng, NodeAdjacencies adjList)
     {
-        System.out.println(neighbourhoodSearch);
+        //System.out.println( "VNS:" + neighbourhoodSearch + ". Run times:" + runTimes);
         Solution nsHolder = null;
         Solution bestVNSSol = null;
         double bestVNSCost = Double.POSITIVE_INFINITY;
@@ -330,6 +357,9 @@ public class QaRsapController
                     nsHolder = ng.splitLocalSearch( inputSol, adjList );
                     break;
                 case 5:  
+                    nsHolder = ng.edgeInsertionSearch(inputSol);
+                    break;
+                case 6:  
                     nsHolder = ng.tertiaryRingSearch(inputSol);
                     break;
             }

@@ -10,6 +10,9 @@
  */
 package ie.ucd.mscba.qa_rsap.valueobjects;
 
+import ie.ucd.mscba.qa_rsap.utils.QaRsapUtils;
+
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -28,13 +31,26 @@ import de.zib.sndlib.network.Network;
 public class NodeAdjacencies
 {
        private Hashtable<String,List<AdjNode>> adjacencies  = null;
-        
-       public NodeAdjacencies()
+       private double scaleRatio  = 0.0;
+       
+        /**
+         * @return the scaleRatio
+         */
+        public double getScaleRatio()
+        {
+            return scaleRatio;
+        }
+
+        public NodeAdjacencies()
        {    
        }
        
         public NodeAdjacencies(List<Link> linkList)
-        {
+        {      
+            
+            double minValue = Double.POSITIVE_INFINITY;
+            double maxValue = Double.NEGATIVE_INFINITY;
+            
             adjacencies = new Hashtable<String,List<AdjNode>>();
  
            for (Link link : linkList)
@@ -43,6 +59,12 @@ public class NodeAdjacencies
                String target = link.getTarget( );
                AdditionalModules additionalModules = link.getAdditionalModules( );
                List<AddModule> moduleList  = additionalModules.getAddModule( );
+               
+               double cost = moduleList.get(0).getCost( ).doubleValue();
+               if(cost < minValue)
+                   minValue = cost;
+               if(cost > maxValue)
+                   maxValue = cost;
                
                List<AdjNode> sourceAdj = adjacencies.get(source);
                List<AdjNode> targetAdj = adjacencies.get(target);
@@ -54,14 +76,14 @@ public class NodeAdjacencies
                { 
                    sourceAdj = new ArrayList<AdjNode>();
                    srcAdjNode.setNodeName(target);
-                   srcAdjNode.setCost(moduleList.get(0).getCost( ).doubleValue());
+                   srcAdjNode.setCost(cost);
                    sourceAdj.add(srcAdjNode);
                    adjacencies.put(source, sourceAdj );                  
                }
                else
                {
                    srcAdjNode.setNodeName(target);
-                   srcAdjNode.setCost(moduleList.get(0).getCost( ).doubleValue());
+                   srcAdjNode.setCost(cost);
                    sourceAdj.add(srcAdjNode);                   
                }
                
@@ -72,14 +94,14 @@ public class NodeAdjacencies
                    
                    targetAdj = new ArrayList<AdjNode>();
                    targAdjNode.setNodeName(source);
-                   targAdjNode.setCost(moduleList.get(0).getCost( ).doubleValue());
+                   targAdjNode.setCost(cost);
                    targetAdj.add(targAdjNode);
                    adjacencies.put(target, targetAdj );                  
                }
                else
                {
                    targAdjNode.setNodeName(source);
-                   targAdjNode.setCost(moduleList.get(0).getCost( ).doubleValue());
+                   targAdjNode.setCost(cost);
                    targetAdj.add(targAdjNode);
                    
                }
@@ -92,6 +114,13 @@ public class NodeAdjacencies
                List<AdjNode> thisList = adjacencies.get( thisKey ) ;
                Collections.sort( thisList );
            }
+           
+           //Perform Scaling on min -> Max value for Quantum Annealing
+           double averageValue = (minValue+maxValue)/2;
+           double scaledValue = QaRsapUtils.normalizeValue(averageValue, minValue, maxValue);
+           scaleRatio = scaledValue/averageValue;
+
+
         }
         
         public NodeAdjacencies reducedClone(List<String> nodeToRemove)

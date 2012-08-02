@@ -18,7 +18,7 @@ import java.util.List;
 /**
  * 
  */
-public class DijkstraNode
+public class DijkstraNode implements Comparable<DijkstraNode> 
 {
 
     String nodeName;
@@ -26,6 +26,20 @@ public class DijkstraNode
     List<String> pathFromRoot;
     boolean visited;
     List<AdjNode> adjList;
+    
+    public int compareTo(DijkstraNode o) 
+    {
+        int returnVal = 0; 
+        if (this.getDistanceToRoot( ) < o.getDistanceToRoot( )) 
+        {
+            returnVal = -1;
+        } 
+        else if (this.getDistanceToRoot() > o.getDistanceToRoot()) 
+        {
+            returnVal = 1;
+        } 
+        return returnVal;
+      }
     
     /**
      * @return the adjList

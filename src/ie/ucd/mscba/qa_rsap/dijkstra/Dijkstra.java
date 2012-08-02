@@ -14,11 +14,11 @@ import ie.ucd.mscba.qa_rsap.valueobjects.AdjNode;
 import ie.ucd.mscba.qa_rsap.valueobjects.NodeAdjacencies;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeMap;
 
 import de.zib.sndlib.network.Node;
 
@@ -29,12 +29,12 @@ public class Dijkstra
 {
 
     HashMap<String, DijkstraNode> dijkstraNodeMap = null;
-    TreeMap<String, DijkstraNode> responseMap = null;
+    List<DijkstraNode> responseList = null;
     
-    public TreeMap<String, DijkstraNode> runDijkstra(Node root, Node targetNode,  List<Node> allNodes, NodeAdjacencies nodeadj)
+    public List<DijkstraNode> runDijkstra(Node root, Node targetNode,  List<Node> allNodes, NodeAdjacencies nodeadj)
     {
         dijkstraNodeMap = new HashMap<String, DijkstraNode>();
-        responseMap = new TreeMap<String, DijkstraNode>();
+        responseList = new ArrayList<DijkstraNode>();
 
         //init
         for (int i=0; i<allNodes.size( ); i++)
@@ -60,7 +60,7 @@ public class Dijkstra
             DijkstraNode dn = findMin( dijkstraNodeMap );
             if(dn != null)
             {
-                responseMap.put( dn.getNodeName( ), dn );
+                responseList.add(dn);
                 dn.setVisited( true );
                 List<AdjNode> adjList = dn.getAdjList( );
                 for (int j=0; j<adjList.size( ); j++)
@@ -69,7 +69,7 @@ public class Dijkstra
                     DijkstraNode thisDn = dijkstraNodeMap.get(thisAdjNode.getNodeName( ));
                     if(thisDn == null)
                     {
-                        thisDn = responseMap.get(thisAdjNode.getNodeName( ));
+                        thisDn = findDNodeinRespList(responseList, thisAdjNode.getNodeName( ));
                     }
                     if(thisDn.getDistanceToRoot( ) > dn.getDistanceToRoot( ) + thisAdjNode.getCost( ))
                     {
@@ -91,31 +91,35 @@ public class Dijkstra
             }
         }
         
-        TreeMap<String, DijkstraNode> returnedMap = new TreeMap<String, DijkstraNode>();
+        //Collections.sort( responseList );
+        List<DijkstraNode> returnedList = new ArrayList<DijkstraNode>();
         if(targetNode != null)
         {
-            DijkstraNode foundNode = null;
-            Set<String> mapSet = responseMap.keySet( );
-            Iterator<String> iter =  mapSet.iterator( );
-            while(iter.hasNext( ) )
-            {
-                DijkstraNode thisNode = responseMap.get(iter.next( ));
-                if(thisNode.getNodeName( ).equalsIgnoreCase( targetNode.getId( )))
-                {
-                    foundNode = thisNode;
-                    break;
-                }
-            }
+            DijkstraNode foundNode = findDNodeinRespList( responseList, targetNode.getId( ) );
             if(foundNode != null)
-                returnedMap.put( foundNode.getNodeName( ), foundNode );
+                returnedList.add(foundNode);
             else
                 return null;
         }
         else
         {
-            returnedMap = responseMap;
+            returnedList = responseList;
+            Collections.sort(returnedList);
         }
-        return returnedMap;
+        return returnedList;
+    }
+    
+    private DijkstraNode findDNodeinRespList(List<DijkstraNode> respList, String nodeToFind)
+    {
+        DijkstraNode returnNode = null;
+        for(DijkstraNode dn : respList)
+        {
+            if(nodeToFind.equalsIgnoreCase( dn.getNodeName( ) ))
+            {
+                returnNode = dn;
+            }
+        }
+        return returnNode;            
     }
     
     public DijkstraNode findMin(HashMap<String, DijkstraNode> dijkstraNodeMap)
@@ -137,4 +141,35 @@ public class Dijkstra
             dijkstraNodeMap.remove( returned.getNodeName( ) );
         return returned;
     }
+    
+//    public DijkstraNode findClosestNodeFromDijkstra(TreeMap<String, DijkstraNode> returnedNodes, List<Node> allNodes, boolean useTertiaryRing, Ring tertiaryRing)
+//    {
+//        //Find closest node
+//        Iterator<String> iter = returnedNodes.keySet( ).iterator( );
+//        double closest = Double.POSITIVE_INFINITY;
+//        DijkstraNode closestNode = null;
+//        while(iter.hasNext( ))
+//        {
+//            String thisKey = iter.next( );
+//            DijkstraNode dn = returnedNodes.get(thisKey);
+//            Node node = QaRsapUtils.getNodeById( dn.getNodeName( ), allNodes);
+//            if(useTertiaryRing && QaRsapUtils.isNodeOnRing( node, tertiaryRing ))
+//            {
+//                if(dn.getDistanceToRoot( ) < closest)
+//                {
+//                    closest = dn.getDistanceToRoot( );
+//                    closestNode = dn;
+//                } 
+//            } 
+//            else
+//            {
+//                if(dn.getDistanceToRoot( ) < closest)
+//                {
+//                    closest = dn.getDistanceToRoot( );
+//                    closestNode = dn;
+//                }          
+//            }
+//        }
+//        return closestNode;     
+//    }
 }

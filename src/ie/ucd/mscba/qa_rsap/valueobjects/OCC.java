@@ -64,7 +64,7 @@ public class OCC
         this.trotterSlices = trotterSlices;
     }
     
-    public void updateOCC(Solution currentSol, int numNodes, int k)
+    public void updateOCC(Solution solAfter, int numNodes, int k)
     {
         //Re-initilize this slice to 0;
         int[][] thisSlice = getTrotterSlices().get( k );
@@ -76,9 +76,9 @@ public class OCC
             }
         }
         
-        List<Ring> localRings = currentSol.getLocalrings( );
-        List<Spur> spurs = currentSol.getSpurs();
-        Ring tertiaryRing = currentSol.getTertiaryRing( );
+        List<Ring> localRings = solAfter.getLocalrings( );
+        List<Spur> spurs = solAfter.getSpurs();
+        Ring tertiaryRing = solAfter.getTertiaryRing( );
         
         //Handle local ring
         for(int i = 0; i<localRings.size(); i++)

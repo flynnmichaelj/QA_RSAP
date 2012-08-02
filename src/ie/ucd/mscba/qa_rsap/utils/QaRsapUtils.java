@@ -100,34 +100,88 @@ public class QaRsapUtils
         boolean isOnRing = false;
         for(Node thisNode : ring.getNodes( ))
         {
-            if(thisNode == node)
-                isOnRing = true;         
+            if(thisNode.getId( ).equalsIgnoreCase(node.getId( )))
+            {
+                isOnRing = true;    
+                break;
+            }
         }
         return isOnRing;
     }
     
-    public static List<String> nodesToRemove(Ring tertiaryRing, List<Spur> spurs, String src, String target)
+    public static boolean isNodeASpur(String nodeName, List<Spur> spurs)
     {
-        List<String> nodesToRemove = new ArrayList<String>( );
+        boolean isASpur = false;
+        for(Spur thisSpur : spurs)
+        {
+            if(thisSpur.getSpurNode( ).getId( ).equalsIgnoreCase(nodeName))
+            {
+                isASpur = true;    
+                break;
+            }
+        }
+        return isASpur;
+    }
+    
+    public static List<String> nodesToRemove(Ring tertiaryRing, List<Spur> spurs, List<Ring> localRings, String[] keepNodes)
+    {
+        List<String> nodesToRemove = new ArrayList<String>();
+        
+        //1) Remove nodes already on Tertiary ring
         if(tertiaryRing != null)
         {            
-            //1) Remove nodes already on Tertiary ring
-            for(int i=0; i<tertiaryRing.getNodes( ).size( ); i++)
+            for(int i=0; i<tertiaryRing.getSize( ); i++)
             {
-                Node thisNode = tertiaryRing.getNodes( ).get( i );
-                if(!(thisNode.getId( )).equalsIgnoreCase( src ) &&
-                                !(thisNode.getId( )).equalsIgnoreCase( target ) )
+                Node thisNode = tertiaryRing.getNodes().get(i);
+                if(safeToRemove(keepNodes, thisNode.getId( )))
                 {
                     nodesToRemove.add(thisNode.getId() );
                 }
             }
         }
         //2) remove nodes that are spurs
-        for(int i=0; i<spurs.size(); i++)
+        if(spurs != null)
         {
-            nodesToRemove.add(spurs.get( i ).getSpurNode( ).getId( ));
+            for(int i=0; i<spurs.size(); i++)
+            {
+                nodesToRemove.add(spurs.get( i ).getSpurNode( ).getId( ));
+            }
         }
+        
+        //2) remove nodes on localRings
+        if(localRings!= null)
+        {
+            for(int i=0; i<localRings.size( ); i++)
+            {
+                Ring currentLocalring = localRings.get(i);
+                for(int j=0; j<currentLocalring.getNodes( ).size(); j++)
+                {
+                    Node thisNode = currentLocalring.getNodes().get(j);
+                    if(safeToRemove(keepNodes, thisNode.getId( )))
+                    {
+                        nodesToRemove.add(thisNode.getId( ));
+                    }
+                }
+            }
+        }
+        
         return nodesToRemove;
+    }
+    
+    //Ensures that the keepNodes are not removed for Dijkstra
+    private static boolean safeToRemove(String[] keepNodes, String currentNode)
+    {
+        boolean safeToRemove = true;
+        for(int j=0; j<keepNodes.length; j++)
+        {
+            String thisKeepNode = keepNodes[j];
+            if(currentNode.equalsIgnoreCase(thisKeepNode))
+            {
+                safeToRemove = false;
+                break;
+            }
+        }
+        return safeToRemove;
     }
     
     public static int countRealNode(Ring tertiaryRing)
@@ -142,5 +196,12 @@ public class QaRsapUtils
         }
         return numRealNode;
     }
-
+    
+    public static double normalizeValue(double input, double minValue, double maxValue)
+    {
+        double temp2 = (input-minValue)/(maxValue-minValue);
+        double temp3 = temp2*(5-1)+1;
+        return temp3;    
+    }
+    
 }
