@@ -15,22 +15,21 @@ package ie.ucd.mscba.qa_rsap.valueobjects;
  */
 public class SolutionElement
 {
-    private double totalCost;
+    private double solutionElementCost;
 
     /**
-     * @return the totalCost
+     * @return the solutionElementCost
      */
-    public double getTotalCost( )
+    public double getSolutionElementCost()
     {
-        return totalCost;
+        return solutionElementCost;
     }
 
     /**
-     * @param totalCost the totalCost to set
+     * @param solutionElementCost the solutionElementCost to set
      */
-    public void setTotalCost( double totalCost )
+    public void setSolutionElementCost(double solutionElementCost)
     {
-        this.totalCost = totalCost;
-    }
-    
+        this.solutionElementCost = solutionElementCost;
+    }    
 }

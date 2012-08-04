@@ -109,18 +109,18 @@ public class QaRsapUtils
         return isOnRing;
     }
     
-    public static boolean isNodeASpur(String nodeName, List<Spur> spurs)
+    public static Spur isNodeASpur(String nodeName, List<Spur> spurs)
     {
-        boolean isASpur = false;
+        Spur spurFound = null;
         for(Spur thisSpur : spurs)
         {
             if(thisSpur.getSpurNode( ).getId( ).equalsIgnoreCase(nodeName))
             {
-                isASpur = true;    
+                spurFound = thisSpur;    
                 break;
             }
         }
-        return isASpur;
+        return spurFound;
     }
     
     public static List<String> nodesToRemove(Ring tertiaryRing, List<Spur> spurs, List<Ring> localRings, String[] keepNodes)
@@ -200,7 +200,7 @@ public class QaRsapUtils
     public static double normalizeValue(double input, double minValue, double maxValue)
     {
         double temp2 = (input-minValue)/(maxValue-minValue);
-        double temp3 = temp2*(5-1)+1;
+        double temp3 = temp2*(4-1)+1;
         return temp3;    
     }
     

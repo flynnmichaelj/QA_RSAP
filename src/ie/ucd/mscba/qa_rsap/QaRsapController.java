@@ -37,10 +37,11 @@ public class QaRsapController
     {
         //Set a default file name if none exists
         if(fileName == null)
-            //fileName = "resources/dfn-bwin.xml";
+            fileName = "resources/dfn-bwin.xml";
             //fileName = "resources/atlanta.xml";
             //fileName = "resources/newyork.xml";
-            fileName = "resources/germany50.xml";
+            //fileName = "resources/germany50.xml";
+            //fileName = "resources/pioro40.xml";
        
         //===========================================================
         //(1)    Build Network Object representation from input file
@@ -141,6 +142,7 @@ public class QaRsapController
             
             int iann = n_ann;
             Solution annealedSol = null;
+            System.out.println("====================Search " + iSearch + "======================");
             while( iann > 0) /// main annealing loop
             {  
                 if(Constants.TROTTER_NUMBER != 1) 
@@ -151,7 +153,7 @@ public class QaRsapController
                 {
                    temp = Constants.INITIAL_TEMPERATURE*(double)(iann/(double)n_ann);  //! classical annealing (temp->0);
                 }
-                //System.out.println("Called anneal for iann:" + iann + "@ temp: " + temp);
+                //System.out.println("Called anneal for iann:" + iann + " @ Temp: " + temp + " @ Gam: " + gam);
                 anneal(networkLinks, solutionsForAnnealing, nodeAdjacencies,  network, temp, gam, Constants.MCS_AT_STEP, iSearch) ; 
                // System.out.println("Finished anneal for iann:" + iann);
                 
@@ -184,6 +186,7 @@ public class QaRsapController
         System.out.println( "============= Overall Best Sol =============" );
         overAllBestSol.printLocalRing( );
         overAllBestSol.printSpurs( );
+        System.out.println( "Total Local Rings and Spurs Cost:" + overAllBestSol.getLocalRingAndSpursCost( ));
         overAllBestSol.printTertiaryRing( );
         System.out.println( "Cost:" + overAllBestSol.getTotalCost( ) );
         System.out.println( "============= Overall Best Sol  =============" );
@@ -197,7 +200,9 @@ public class QaRsapController
     {
         double VnsDistDiff = 0.0;
         double betaTrotter = 0.0;
-        double acc = 0.0;        
+        double totalAcc = 0.0; 
+        double badAcc = 0.0;
+        double badGenerated = 0.0;
         double beta = 1.0/((Constants.TROTTER_NUMBER) * temp);
         
         if(Constants.TROTTER_NUMBER != 1) 
@@ -219,7 +224,7 @@ public class QaRsapController
             //{
                 for (int k = 0; k<Constants.TROTTER_NUMBER ; k++)           // loop over Trotter slices      
                 {
-                    //System.out.println("Entered Trotter slice: " + k + "For nmcs: " + istep);
+                    System.out.println("Entered Trotter slice: " + k + "For nmcs: " + istep);
                     //Solution bestSolSoFar = currrentSliceSolutions[k];                
                     Solution vnsResult = currrentSliceSolutions[k];
             
@@ -284,14 +289,11 @@ public class QaRsapController
                     VnsDistDiff = vnsResult.getTotalCost() - currrentSliceSolutions[k].getTotalCost( );
                     double scaledDiff = VnsDistDiff*nodeAdjacencies.getScaleRatio( );
                     
-                    if(scaledDiff > 0.0)
+                    if(VnsDistDiff > 0.0)
                     {
-                        String h = "dsdfs";
+                        badGenerated ++;
                     }
-                    else if(scaledDiff < 0.0)
-                    {
-                        String h= "sdsdf";
-                    }
+                    
                     double change = 0;
                     
                     OCCChangeHolder changHolder = null;
@@ -323,19 +325,24 @@ public class QaRsapController
                         {
                             perSearchBest[iSearch] = vnsResult;
                         }
-                        acc = acc + 1.0;
+                        totalAcc = totalAcc + 1.0;
+                        if(VnsDistDiff > 0)
+                        {
+                            badAcc = badAcc + 1.0;
+                        }
                     }
                 }
             //}           
         }
         
-        acc = acc/((double)nmcs*(double)Constants.TROTTER_NUMBER);  
-        System.out.println("decision acceptance:" + acc);
+        totalAcc = totalAcc/((double)nmcs*(double)Constants.TROTTER_NUMBER);  
+        badAcc = badAcc/badGenerated;  
+        //System.out.println("Total acceptance:" + totalAcc + " | Bad Sol acceptance:" + badAcc);
     }
     
     private Solution invokeVNS(Solution inputSol, long runTimes, int neighbourhoodSearch, List<Link> networkLinks, NeighbourGenerator ng, NodeAdjacencies adjList)
     {
-        //System.out.println( "VNS:" + neighbourhoodSearch + ". Run times:" + runTimes);
+        System.out.println( "VNS:" + neighbourhoodSearch + ". Run times:" + runTimes);
         Solution nsHolder = null;
         Solution bestVNSSol = null;
         double bestVNSCost = Double.POSITIVE_INFINITY;

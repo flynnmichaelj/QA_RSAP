@@ -80,7 +80,8 @@ public class Spur extends SolutionElement
             {
                 spurCost = spurCost + link.getAdditionalModules( ).getAddModule( ).get( capacityCost ).getCost( ).doubleValue( );   
             }
-        }          
+        }      
+        setSolutionElementCost(spurCost*penalty);
         return spurCost*penalty;
     }
 }

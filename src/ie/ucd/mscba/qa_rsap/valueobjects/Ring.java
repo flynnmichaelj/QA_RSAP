@@ -106,6 +106,7 @@ public class Ring extends SolutionElement
                 }
             }          
         }
+        setSolutionElementCost(ringCost);
         return ringCost;
     }    
 }

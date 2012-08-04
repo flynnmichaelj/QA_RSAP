@@ -10,6 +10,7 @@
  */
 package ie.ucd.mscba.qa_rsap.dijkstra;
 
+import ie.ucd.mscba.qa_rsap.utils.QaRsapUtils;
 import ie.ucd.mscba.qa_rsap.valueobjects.AdjNode;
 import ie.ucd.mscba.qa_rsap.valueobjects.NodeAdjacencies;
 
@@ -27,19 +28,34 @@ import de.zib.sndlib.network.Node;
  */
 public class Dijkstra
 {
-
+    List<Node> allNetworkNodes;
     HashMap<String, DijkstraNode> dijkstraNodeMap = null;
     List<DijkstraNode> responseList = null;
-    
-    public List<DijkstraNode> runDijkstra(Node root, Node targetNode,  List<Node> allNodes, NodeAdjacencies nodeadj)
+    NodeAdjacencies nodeAdjacencies = null;
+
+    public Dijkstra(List<Node> allNetworkNodes, NodeAdjacencies nodeAdjacencies)
     {
+        this.allNetworkNodes = allNetworkNodes;
+        this.nodeAdjacencies = nodeAdjacencies;
+    }
+
+    public List<DijkstraNode> runDijkstra(Node root, Node targetNode, List<String> nodesToRemove)
+    {
+        List<Node> reducedAllNodes = new ArrayList<Node>(allNetworkNodes);
+        for(int j = 0; j < nodesToRemove.size(); j++)
+        {
+            Node currentNode = QaRsapUtils.getNodeById(nodesToRemove.get(j), allNetworkNodes);
+            reducedAllNodes.remove(currentNode);
+        }
+        NodeAdjacencies nodeadj = nodeAdjacencies.reducedClone(nodesToRemove);
+
         dijkstraNodeMap = new HashMap<String, DijkstraNode>();
         responseList = new ArrayList<DijkstraNode>();
 
         //init
-        for (int i=0; i<allNodes.size( ); i++)
+        for (int i=0; i<reducedAllNodes.size( ); i++)
         {
-            Node thisNode = allNodes.get( i );
+            Node thisNode = reducedAllNodes.get( i );
             DijkstraNode dn = new DijkstraNode();
             dn.setNodeName(thisNode.getId( ));
             dn.setAdjList( nodeadj.getAdjList( thisNode.getId( )));

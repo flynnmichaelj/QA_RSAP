@@ -32,6 +32,7 @@ public class Solution
        private List<Spur> spurs;
        
        private double totalCost;
+       private double localRingAndSpursCost;
 
        public Solution clone()
        {
@@ -56,6 +57,20 @@ public class Solution
            
            return cloned;
        }
+    /**
+     * @return the localRingAndSpursCost
+     */
+    public double getLocalRingAndSpursCost()
+    {
+        return localRingAndSpursCost;
+    }
+    /**
+     * @param localRingAndSpursCost the localRingAndSpursCost to set
+     */
+    public void setLocalRingAndSpursCost(double localRingAndSpursCost)
+    {
+        this.localRingAndSpursCost = localRingAndSpursCost;
+    }
     /**
      * @return the localrings
      */
@@ -127,11 +142,13 @@ public class Solution
     public void calculateTotalCost(List<Link> links)
     {
         double totalCost = 0.0;
+        double ringsAndSpursCost = 0.0;
         
         //Calculate local Rings Cost
         for(Ring ring : getLocalrings( ))
         {
             totalCost = totalCost + ring.getRingCost(links, Constants.localRingCapcacityModule);
+            ringsAndSpursCost = ringsAndSpursCost + ring.getRingCost(links, Constants.localRingCapcacityModule);
         }
         
         //Calculate tertiary ring cost
@@ -144,34 +161,42 @@ public class Solution
         for(Spur spur : getSpurs( ))
         {
             totalCost = totalCost + spur.getSpurCost( links, Constants.spurPenaltyCost, Constants.localRingCapcacityModule);
+            ringsAndSpursCost = ringsAndSpursCost + spur.getSpurCost( links, Constants.spurPenaltyCost, Constants.localRingCapcacityModule);
         }
         
         setTotalCost(totalCost);
+        setLocalRingAndSpursCost( ringsAndSpursCost );
     }
     
     public void printLocalRing ()
     {
         //Print Local Ring
         System.out.println("******** LOCAL RING *********");
+        double totalLocalRingsCost = 0.0;
         for(Ring ring : this.getLocalrings( ))
         {
             for(int i=0; i<ring.getSize( ); i++ )
             {
-                System.out.print( ring.getSpecificNodeName(i) + " --> " );
+                System.out.print( ring.getSpecificNodeName(i) + " --> " ); 
             }  
             System.out.println( );
+            totalLocalRingsCost = totalLocalRingsCost + ring.getSolutionElementCost( );
         }
+        System.out.println("*****Total Local Rings Cost : " + totalLocalRingsCost);
         System.out.println("*****************************");
     }
     
     public void printSpurs()
     {
         System.out.println("******** SPUR *********");
+        double totalSpursCost = 0.0;
         for(Spur spur : this.getSpurs( ))
         {  
             System.out.println(spur.getParentNode( ).getId( ) + " --> " + spur.getSpurNode( ).getId( ));
             System.out.println( );
+            totalSpursCost = totalSpursCost + spur.getSolutionElementCost( );
         }
+        System.out.println("*****Total Spurs Cost : " + totalSpursCost);
         System.out.println("*********************");
     }
     
@@ -186,6 +211,7 @@ public class Solution
                 System.out.print(this.getTertiaryRing( ).getSpecificNodeName(i) + " --> " );  
             }
             System.out.println( );
+            System.out.println("*****Tertiary Ring Cost : " + this.getTertiaryRing( ).getSolutionElementCost( ));
         }
         System.out.println("*****************************");
     }
@@ -209,6 +235,20 @@ public class Solution
                 
         }
         
+        //Verify that there is not tertiary ring if there is only one local ring
+        if(getLocalrings( ).size() == 1) 
+        {
+            Ring tertiaryRing = getTertiaryRing();
+            if(tertiaryRing != null)
+            {
+                if(tertiaryRing.getNodes().size() > 0)
+                {
+                    System.out.println("ERROR: A tertiary Ring should not exist if only one local ring exists");
+                    printBadSolution();
+                    valid = false;
+                }
+            }
+        }
         //Validate tertiary Ring
         if(getTertiaryRing( ) != null)
         {
@@ -338,7 +378,7 @@ public class Solution
         printTertiaryRing( );
         System.out.println( "============= End Validate Solution =============" );
         
-        //System.exit( 1 );
+        System.exit( 1 );
     }
        
 }
