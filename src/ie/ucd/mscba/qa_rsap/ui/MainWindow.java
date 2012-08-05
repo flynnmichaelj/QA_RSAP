@@ -185,7 +185,7 @@ public class MainWindow
         resultText = resultsPanel.buildResultsPanel( displaySash );
         
         //Initilize appropiate sizes for display components.
-        menuSash.setWeights( new int[] {1,3} );
+        menuSash.setWeights( new int[] {1,2} );
         displaySash.setWeights( new int[] {2,1});
         
         butt_start.addSelectionListener(new SelectionAdapter() 

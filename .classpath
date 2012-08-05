@@ -7,6 +7,5 @@
 	<classpathentry kind="lib" path="lib/jgraph.jar"/>
 	<classpathentry kind="lib" path="lib/jgrapht-jdk1.6.jar" sourcepath="/GraphDemo/src"/>
 	<classpathentry kind="lib" path="lib/org.eclipse.swt.win32.win32.x86_64_3.7.2.v3740f.jar"/>
-	<classpathentry kind="lib" path="lib/json_simple-1.1.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
