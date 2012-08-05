@@ -21,8 +21,9 @@ public class QaRsapMain
      */
     public static void main( String[] args )
     {
-        QaRsapController controller = new QaRsapController();
-        controller.runQaRsap(null);
+        //QaRsapController controller = new QaRsapController();
+        //controller.runQaRsap(null);
+        System.out.println("This main class should be deleted. was used before UI was in place");
     }
 
 }

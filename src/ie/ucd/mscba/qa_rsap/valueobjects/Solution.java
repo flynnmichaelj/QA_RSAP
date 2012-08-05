@@ -8,15 +8,14 @@
  * Package ie.ucd.mscba.qa_rsap.valueobjects
  * Project QA_RSAP
  */
+
 package ie.ucd.mscba.qa_rsap.valueobjects;
 
-import ie.ucd.mscba.qa_rsap.Constants;
+import ie.ucd.mscba.qa_rsap.settings.VNSSettings;
 import ie.ucd.mscba.qa_rsap.utils.QaRsapUtils;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import de.zib.sndlib.network.Link;
 import de.zib.sndlib.network.Node;
@@ -24,39 +23,63 @@ import de.zib.sndlib.network.Node;
 /**
  * 
  */
-public class Solution 
+public class Solution
 {
 
-       private List<Ring> localrings;
-       private Ring tertiaryRing;
-       private List<Spur> spurs;
-       
-       private double totalCost;
-       private double localRingAndSpursCost;
+    private List<Ring>  localrings;
+    private Ring        tertiaryRing;
+    private List<Spur>  spurs;
 
-       public Solution clone()
-       {
-           Solution cloned = new Solution();
-           List<Ring> localRings = getLocalrings();
-           List<Spur> spurs = getSpurs();
-           Ring tertiaryRing = getTertiaryRing( );
-           
-           for(int i=0; i<localRings.size(); i++)
-           {
-               cloned.getLocalrings().add(localRings.get(i).clone());
-           }
-           for(int i=0; i<spurs.size(); i++)
-           {
-               cloned.getSpurs().add(spurs.get(i).clone());
-           }
-           if(tertiaryRing != null)
-           {
-               cloned.setTertiaryRing(tertiaryRing.clone( ));
-           }
-           cloned.totalCost = totalCost;
-           
-           return cloned;
-       }
+    private double      totalCost;
+    private double      localRingAndSpursCost;
+    private VNSSettings vnsSettings = null;
+
+    public Solution(VNSSettings vnsSettings)
+    {
+        this.vnsSettings = vnsSettings;
+    }
+
+    /**
+     * @return the vnsSettings
+     */
+    public VNSSettings getVnsSettings()
+    {
+        return vnsSettings;
+    }
+
+    /**
+     * @param vnsSettings
+     *            the vnsSettings to set
+     */
+    public void setVnsSettings(VNSSettings vnsSettings)
+    {
+        this.vnsSettings = vnsSettings;
+    }
+
+    public Solution clone()
+    {
+        Solution cloned = new Solution(vnsSettings);
+        List<Ring> localRings = getLocalrings();
+        List<Spur> spurs = getSpurs();
+        Ring tertiaryRing = getTertiaryRing();
+
+        for(int i = 0; i < localRings.size(); i++)
+        {
+            cloned.getLocalrings().add(localRings.get(i).clone());
+        }
+        for(int i = 0; i < spurs.size(); i++)
+        {
+            cloned.getSpurs().add(spurs.get(i).clone());
+        }
+        if(tertiaryRing != null)
+        {
+            cloned.setTertiaryRing(tertiaryRing.clone());
+        }
+        cloned.totalCost = totalCost;
+
+        return cloned;
+    }
+
     /**
      * @return the localRingAndSpursCost
      */
@@ -64,17 +87,20 @@ public class Solution
     {
         return localRingAndSpursCost;
     }
+
     /**
-     * @param localRingAndSpursCost the localRingAndSpursCost to set
+     * @param localRingAndSpursCost
+     *            the localRingAndSpursCost to set
      */
     public void setLocalRingAndSpursCost(double localRingAndSpursCost)
     {
         this.localRingAndSpursCost = localRingAndSpursCost;
     }
+
     /**
      * @return the localrings
      */
-    public List<Ring> getLocalrings( )
+    public List<Ring> getLocalrings()
     {
         if(localrings == null)
             localrings = new ArrayList<Ring>();
@@ -82,9 +108,10 @@ public class Solution
     }
 
     /**
-     * @param localrings the localrings to set
+     * @param localrings
+     *            the localrings to set
      */
-    public void setLocalrings( List<Ring> localrings )
+    public void setLocalrings(List<Ring> localrings)
     {
         this.localrings = localrings;
     }
@@ -92,15 +119,16 @@ public class Solution
     /**
      * @return the tertiaryRing
      */
-    public Ring getTertiaryRing( )
+    public Ring getTertiaryRing()
     {
         return tertiaryRing;
     }
 
     /**
-     * @param tertiaryRing the tertiaryRing to set
+     * @param tertiaryRing
+     *            the tertiaryRing to set
      */
-    public void setTertiaryRing( Ring tertiaryRing )
+    public void setTertiaryRing(Ring tertiaryRing)
     {
         this.tertiaryRing = tertiaryRing;
     }
@@ -108,7 +136,7 @@ public class Solution
     /**
      * @return the spurs
      */
-    public List<Spur> getSpurs( )
+    public List<Spur> getSpurs()
     {
         if(spurs == null)
             spurs = new ArrayList<Spur>();
@@ -116,9 +144,10 @@ public class Solution
     }
 
     /**
-     * @param spurs the spurs to set
+     * @param spurs
+     *            the spurs to set
      */
-    public void setSpurs(List<Spur> spurs )
+    public void setSpurs(List<Spur> spurs)
     {
         this.spurs = spurs;
     }
@@ -126,117 +155,134 @@ public class Solution
     /**
      * @return the totalCost
      */
-    public double getTotalCost( )
+    public double getTotalCost()
     {
         return totalCost;
     }
 
     /**
-     * @param totalCost the totalCost to set
+     * @param totalCost
+     *            the totalCost to set
      */
-    public void setTotalCost( double totalCost )
+    public void setTotalCost(double totalCost)
     {
         this.totalCost = totalCost;
-    } 
-    
+    }
+
     public void calculateTotalCost(List<Link> links)
     {
         double totalCost = 0.0;
         double ringsAndSpursCost = 0.0;
-        
-        //Calculate local Rings Cost
-        for(Ring ring : getLocalrings( ))
+
+        // Calculate local Rings Cost
+        for(Ring ring : getLocalrings())
         {
-            totalCost = totalCost + ring.getRingCost(links, Constants.localRingCapcacityModule);
-            ringsAndSpursCost = ringsAndSpursCost + ring.getRingCost(links, Constants.localRingCapcacityModule);
+            totalCost = totalCost + ring.getRingCost(links, vnsSettings.getCapacityModule());
+            ringsAndSpursCost = ringsAndSpursCost + ring.getRingCost(links, vnsSettings.getCapacityModule());
         }
-        
-        //Calculate tertiary ring cost
+
+        // Calculate tertiary ring cost
         if(getTertiaryRing() != null)
         {
-            totalCost = totalCost + getTertiaryRing( ).getRingCost( links, Constants.tertiaryRingCapcacityModule);
+            totalCost = totalCost + getTertiaryRing().getRingCost(links, vnsSettings.getCapacityModule());
         }
-        
-        //Calculate spurs cost
-        for(Spur spur : getSpurs( ))
+
+        // Calculate spurs cost
+        for(Spur spur : getSpurs())
         {
-            totalCost = totalCost + spur.getSpurCost( links, Constants.spurPenaltyCost, Constants.localRingCapcacityModule);
-            ringsAndSpursCost = ringsAndSpursCost + spur.getSpurCost( links, Constants.spurPenaltyCost, Constants.localRingCapcacityModule);
+            totalCost = totalCost + spur.getSpurCost(links, vnsSettings.getSpurPenalty(), vnsSettings.getCapacityModule());
+            ringsAndSpursCost = ringsAndSpursCost
+                            + spur.getSpurCost(links, vnsSettings.getSpurPenalty(), vnsSettings.getCapacityModule());
         }
-        
+
         setTotalCost(totalCost);
-        setLocalRingAndSpursCost( ringsAndSpursCost );
+        setLocalRingAndSpursCost(ringsAndSpursCost);
     }
-    
-    public void printLocalRing ()
+
+    public String printLocalRing()
     {
-        //Print Local Ring
-        System.out.println("******** LOCAL RING *********");
+        StringBuilder output = new StringBuilder();
+        // Print Local Ring
+        output.append("******** LOCAL RING *********\r\n");
         double totalLocalRingsCost = 0.0;
-        for(Ring ring : this.getLocalrings( ))
+        for(Ring ring : this.getLocalrings())
         {
-            for(int i=0; i<ring.getSize( ); i++ )
+            for(int i = 0; i < ring.getSize(); i++)
             {
-                System.out.print( ring.getSpecificNodeName(i) + " --> " ); 
-            }  
-            System.out.println( );
-            totalLocalRingsCost = totalLocalRingsCost + ring.getSolutionElementCost( );
-        }
-        System.out.println("*****Total Local Rings Cost : " + totalLocalRingsCost);
-        System.out.println("*****************************");
-    }
-    
-    public void printSpurs()
-    {
-        System.out.println("******** SPUR *********");
-        double totalSpursCost = 0.0;
-        for(Spur spur : this.getSpurs( ))
-        {  
-            System.out.println(spur.getParentNode( ).getId( ) + " --> " + spur.getSpurNode( ).getId( ));
-            System.out.println( );
-            totalSpursCost = totalSpursCost + spur.getSolutionElementCost( );
-        }
-        System.out.println("*****Total Spurs Cost : " + totalSpursCost);
-        System.out.println("*********************");
-    }
-    
-    public void printTertiaryRing()
-    {
-        //Print Tertiary Ring
-        System.out.println("******** TERTIARY RING *********");
-        if(getTertiaryRing( ) != null)
-        {
-            for(int i=0; i<this.getTertiaryRing( ).getSize( ); i++ )
-            {
-                System.out.print(this.getTertiaryRing( ).getSpecificNodeName(i) + " --> " );  
+                output.append(ring.getSpecificNodeName(i));
+                if(i != ring.getSize()-1)
+                {
+                    output.append(", ");
+                }
             }
-            System.out.println( );
-            System.out.println("*****Tertiary Ring Cost : " + this.getTertiaryRing( ).getSolutionElementCost( ));
+            output.append("\r\n");
+            totalLocalRingsCost = totalLocalRingsCost + ring.getSolutionElementCost();
         }
-        System.out.println("*****************************");
+        output.append("Total Local Rings Cost : " + totalLocalRingsCost +"\r\n");
+        output.append("*****************************");
+        
+        return output.toString();
     }
-    
-    //===========================================
-    //Validate Solution
-    //============================================
+
+    public String printSpurs()
+    {
+        StringBuilder output = new StringBuilder();
+        output.append("******** SPUR *********\r\n");
+        double totalSpursCost = 0.0;
+        for(Spur spur : this.getSpurs())
+        {
+            output.append(spur.getParentNode().getId() + " --> " + spur.getSpurNode().getId());
+            output.append("\r\n");
+            totalSpursCost = totalSpursCost + spur.getSolutionElementCost();
+        }
+        output.append("Total Spurs Cost : " + totalSpursCost +"\r\n");
+        output.append("*********************");
+        return output.toString();
+    }
+
+    public String printTertiaryRing()
+    {
+        StringBuilder output = new StringBuilder();
+        // Print Tertiary Ring
+        output.append("******** TERTIARY RING *********\r\n");
+        if(getTertiaryRing() != null)
+        {
+            for(int i = 0; i < this.getTertiaryRing().getSize(); i++)
+            {
+                output.append(this.getTertiaryRing().getSpecificNodeName(i));
+                if(i != getTertiaryRing().getSize()-1)
+                {
+                    output.append(", ");
+                }
+            }
+            output.append("\r\n");
+            output.append("Tertiary Ring Cost : " + this.getTertiaryRing().getSolutionElementCost() + "\r\n");
+        }
+        output.append("*****************************");
+        return output.toString();
+    }
+
+    // ===========================================
+    // Validate Solution
+    // ============================================
     public boolean validate(NodeAdjacencies nodeAdjs, int numNodesInPlay)
     {
         boolean valid = true;
-        //Validate local rings
-        for(Ring ring : getLocalrings( ))
-        {         
-            if(!validateRings(ring, nodeAdjs, "local" ))
+        // Validate local rings
+        for(Ring ring : getLocalrings())
+        {
+            if(! validateRings(ring, nodeAdjs, "local"))
             {
                 System.out.println("ERROR: A local ring is not valid");
                 printBadSolution();
                 valid = false;
                 break;
             }
-                
+
         }
-        
-        //Verify that there is not tertiary ring if there is only one local ring
-        if(getLocalrings( ).size() == 1) 
+
+        // Verify that there is not tertiary ring if there is only one local ring
+        if(getLocalrings().size() == 1)
         {
             Ring tertiaryRing = getTertiaryRing();
             if(tertiaryRing != null)
@@ -249,136 +295,139 @@ public class Solution
                 }
             }
         }
-        //Validate tertiary Ring
-        if(getTertiaryRing( ) != null)
+        // Validate tertiary Ring
+        if(getTertiaryRing() != null)
         {
-            if(!validateRings(getTertiaryRing( ), nodeAdjs, "tertiary" ))
+            if(! validateRings(getTertiaryRing(), nodeAdjs, "tertiary"))
             {
                 System.out.println("ERROR: Tertiary ring is not valid");
                 printBadSolution();
-                valid=false;
-                
+                valid = false;
+
             }
         }
-        
-        //Ensure a node is not on more than one local ring & spurs
+
+        // Ensure a node is not on more than one local ring & spurs
         List<Node> nodesOnRing = new ArrayList<Node>();
         int countOfNodes = 0;
-        for(Ring ring : getLocalrings( ))
-        {   
-            for(int i=0; i<ring.getNodes( ).size( )-1; i++)
-            { 
-                countOfNodes ++;
-                Node node =  ring.getNodes( ).get( i );
-                if(!nodesOnRing.contains(node))
-                {
-                    nodesOnRing.add(node );
-                }
-                else
-                {
-                    System.out.println("ERROR: Duplicate node found on more than one local rings:" + node.getId( ));
-                    printBadSolution();
-                    valid=false; 
-                }
-            }             
-        }
-        for(int i=0; i<getSpurs( ).size( ); i++)
+        for(Ring ring : getLocalrings())
         {
-            countOfNodes++;
-            Spur thisSpur = getSpurs( ).get(i);
-            if(!nodesOnRing.contains(thisSpur.getSpurNode( )))
+            for(int i = 0; i < ring.getNodes().size() - 1; i++)
             {
-                nodesOnRing.add(thisSpur.getSpurNode( ) );
-            }
-            else
-            {
-                System.out.println("ERROR: Duplicate node found ona ring and a spur" + thisSpur.getSpurNode( ).getId( ));
-                printBadSolution();
-                valid=false; 
-            }
-        }
-        //Validate the correct number of nodes are in play
-        if(countOfNodes != numNodesInPlay)
-        {
-            System.out.println("ERROR: Incorrect number of nodes in play. Found " + countOfNodes +". Should be " + numNodesInPlay);
-            printBadSolution();
-            valid=false; 
-        }
-        return valid;
-    }
-    
-    private boolean validateRings(Ring ring, NodeAdjacencies nodeAdjs, String ringType)
-    {
-        boolean valid = true;
-        
-        //Check for a minimum length of 4 (3 node + duplicate)
-        if(ring.getSize( ) < 4)
-        {
-            System.out.println("ERROR: Invalid Ring lenght on " +ringType+ ". Lenght is:" + ring.getSize( ));
-            printBadSolution();
-            valid=false;
-        }
-        
-        //Check is end node and start node the same
-        if(ring.getSpecificNode( 0 ) != ring.getSpecificNode(ring.getSize( )-1 ))
-        {
-            System.out.println("ERROR: End node and start node is not the same");
-            printBadSolution();
-            valid=false;
-        }
-        
-        //Ensure node is not repeated on a ring & no TempNodes exist
-        List<Node> nodesOnRing = new ArrayList<Node>();
-        for(int i=0; i<ring.getNodes( ).size( )-1; i++)
-        {
-            Node node = ring.getNodes( ).get(i);
-            if("TempNode".equalsIgnoreCase(node.getId( )))
-            {
-                System.out.println("ERROR: TempNode Still exists in "+ringType+ " ring");
-                printBadSolution();
-                valid=false;   
-            }
-            else
-            {
-                if(!nodesOnRing.contains(node))
+                countOfNodes++;
+                Node node = ring.getNodes().get(i);
+                if(! nodesOnRing.contains(node))
                 {
                     nodesOnRing.add(node);
                 }
                 else
                 {
-                    System.out.println("ERROR: Duplicate node found in " +ringType+ " ring:" + node.getId( ));
+                    System.out.println("ERROR: Duplicate node found on more than one local rings:" + node.getId());
                     printBadSolution();
-                    valid=false; 
+                    valid = false;
                 }
             }
         }
-        
-        //Ensure all node on the ring are adjacent
-        for(int i=0; i<ring.getNodes( ).size( )-1; i++)
+        for(int i = 0; i < getSpurs().size(); i++)
         {
-           Node leftNode = ring.getNodes( ).get( i );
-           Node rightNode = ring.getNodes( ).get( i+1 );
-           List<AdjNode> adjList = nodeAdjs.getAdjList( leftNode.getId( ) );
-           if(!QaRsapUtils.isAdj( rightNode.getId( ), adjList ))
-           {
-               System.out.println("ERROR: Nodes not adjacent:" + leftNode.getId( ) + " & " + rightNode.getId( ));
-               printBadSolution();
-               valid=false;  
-           }
+            countOfNodes++;
+            Spur thisSpur = getSpurs().get(i);
+            if(! nodesOnRing.contains(thisSpur.getSpurNode()))
+            {
+                nodesOnRing.add(thisSpur.getSpurNode());
+            }
+            else
+            {
+                System.out.println("ERROR: Duplicate node found ona ring and a spur" + thisSpur.getSpurNode().getId());
+                printBadSolution();
+                valid = false;
+            }
         }
-        
+        // Validate the correct number of nodes are in play
+        if(countOfNodes != numNodesInPlay)
+        {
+            System.out.println("ERROR: Incorrect number of nodes in play. Found " + countOfNodes + ". Should be "
+                            + numNodesInPlay);
+            printBadSolution();
+            valid = false;
+        }
         return valid;
     }
-    
-    private void printBadSolution()
+
+    private boolean validateRings(Ring ring, NodeAdjacencies nodeAdjs, String ringType)
     {
-        System.out.println( "============= Validate Solution =============" );
-        printLocalRing( );
-        printSpurs( );
-        printTertiaryRing( );
-        System.out.println( "============= End Validate Solution =============" );
-        
-        System.exit( 1 );
+        boolean valid = true;
+
+        // Check for a minimum length of 4 (3 node + duplicate)
+        if(ring.getSize() < 4)
+        {
+            System.out.println("ERROR: Invalid Ring lenght on " + ringType + ". Lenght is:" + ring.getSize());
+            printBadSolution();
+            valid = false;
+        }
+
+        // Check is end node and start node the same
+        if(ring.getSpecificNode(0) != ring.getSpecificNode(ring.getSize() - 1))
+        {
+            System.out.println("ERROR: End node and start node is not the same");
+            printBadSolution();
+            valid = false;
+        }
+
+        // Ensure node is not repeated on a ring & no TempNodes exist
+        List<Node> nodesOnRing = new ArrayList<Node>();
+        for(int i = 0; i < ring.getNodes().size() - 1; i++)
+        {
+            Node node = ring.getNodes().get(i);
+            if("TempNode".equalsIgnoreCase(node.getId()))
+            {
+                System.out.println("ERROR: TempNode Still exists in " + ringType + " ring");
+                printBadSolution();
+                valid = false;
+            }
+            else
+            {
+                if(! nodesOnRing.contains(node))
+                {
+                    nodesOnRing.add(node);
+                }
+                else
+                {
+                    System.out.println("ERROR: Duplicate node found in " + ringType + " ring:" + node.getId());
+                    printBadSolution();
+                    valid = false;
+                }
+            }
+        }
+
+        // Ensure all node on the ring are adjacent
+        for(int i = 0; i < ring.getNodes().size() - 1; i++)
+        {
+            Node leftNode = ring.getNodes().get(i);
+            Node rightNode = ring.getNodes().get(i + 1);
+            List<AdjNode> adjList = nodeAdjs.getAdjList(leftNode.getId());
+            if(! QaRsapUtils.isAdj(rightNode.getId(), adjList))
+            {
+                System.out.println("ERROR: Nodes not adjacent:" + leftNode.getId() + " & " + rightNode.getId());
+                printBadSolution();
+                valid = false;
+            }
+        }
+
+        return valid;
     }
-       
+
+    private String printBadSolution()
+    {
+        StringBuilder output = new StringBuilder();
+        output.append("============= Validate Solution =============\r");
+        output.append(printLocalRing());
+        output.append(printSpurs());
+        output.append(printTertiaryRing());
+        output.append("============= End Validate Solution =============");
+
+        //System.exit(1);
+        return output.toString();
+    }
+
 }

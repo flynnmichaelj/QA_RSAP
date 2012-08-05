@@ -11,6 +11,7 @@
 package ie.ucd.mscba.qa_rsap.valueobjects;
 
 import ie.ucd.mscba.qa_rsap.Constants;
+import ie.ucd.mscba.qa_rsap.settings.AnnealSettings;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,7 +25,12 @@ public class OCC
 {
     List<int[][]> trotterSlices = null;
     int[] diffOcc = null;
+    int numTrotters = 1;
 
+    public OCC(int numTrotters)
+    {
+        this.numTrotters = numTrotters;
+    }
     /**
      * @return the diffOcc
      */
@@ -115,18 +121,18 @@ public class OCC
     
     public void getOCC(Solution currentSol, int numNodes)
     {
-        for(int i =0; i< Constants.TROTTER_NUMBER; i++)
+        for(int i =0; i<numTrotters; i++)
         {
             int[][] slice = new int[numNodes][numNodes];
             getTrotterSlices( ).add(slice);
         }
-        initDiffOcc(Constants.TROTTER_NUMBER);
+        initDiffOcc(numTrotters);
         
         List<Ring> localRings = currentSol.getLocalrings( );
         List<Spur> spurs = currentSol.getSpurs();
         Ring tertiaryRing = currentSol.getTertiaryRing( );
         
-        for( int r = 0 ; r<Constants.TROTTER_NUMBER; r++)
+        for( int r = 0 ; r<numTrotters; r++)
         {
             int[][] thisSlice = getTrotterSlices().get( r );
             //Handle local ring
@@ -161,7 +167,7 @@ public class OCC
                 }
             }
         }
-        for( int r = 0 ; r<Constants.TROTTER_NUMBER-1; r++)
+        for( int r = 0 ; r<numTrotters-1; r++)
         {
             int numDiffCounter = 0;
             int[][] trotterSliceR = getTrotterSlices( ).get( r );
@@ -305,7 +311,7 @@ public class OCC
         }
         
         // change of the number of different occ between k and k+1
-        if (k!=Constants.TROTTER_NUMBER-1) 
+        if (k!=numTrotters-1) 
         {
             int[][] thisSlice = getTrotterSlices().get(k+1);
             //Handle local ring

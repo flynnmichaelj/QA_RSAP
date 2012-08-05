@@ -13,6 +13,7 @@ package ie.ucd.mscba.qa_rsap.processor;
 import ie.ucd.mscba.qa_rsap.Constants;
 import ie.ucd.mscba.qa_rsap.dijkstra.Dijkstra;
 import ie.ucd.mscba.qa_rsap.dijkstra.DijkstraNode;
+import ie.ucd.mscba.qa_rsap.settings.VNSSettings;
 import ie.ucd.mscba.qa_rsap.utils.QaRsapUtils;
 import ie.ucd.mscba.qa_rsap.valueobjects.AdjNode;
 import ie.ucd.mscba.qa_rsap.valueobjects.BestConnectors;
@@ -42,8 +43,9 @@ public class SolutionGenerator
     List<Link>              networkLinks    = null;
     List<Node>              networkNodes    = null;
     private Dijkstra        dijkstra        = null;
+    private VNSSettings     vnsSettings     = null;
 
-    public SolutionGenerator( Network network, NodeAdjacencies nodeAdjacencies )
+    public SolutionGenerator( Network network, NodeAdjacencies nodeAdjacencies, VNSSettings vnsSettings )
     {
         super( );
         this.network = network;
@@ -51,11 +53,12 @@ public class SolutionGenerator
         this.networkLinks = network.getNetworkStructure().getLinks().getLink();
         this.networkNodes = network.getNetworkStructure().getNodes().getNode();
         this.dijkstra = new Dijkstra(this.networkNodes, this.nodeAdjacencies);
+        this.vnsSettings = vnsSettings;
     }
 
     public Solution getInitialSolution()
     {
-        Solution sol = new Solution( );
+        Solution sol = new Solution(vnsSettings);
 
         List<Node> allNetworkNodes = network.getNetworkStructure( ).getNodes( ).getNode( );
 
@@ -123,7 +126,7 @@ public class SolutionGenerator
         // /Calculate Total cost.
         // /----------------------------------------------------------
         sol.calculateTotalCost( network.getNetworkStructure( ).getLinks( ).getLink( ) );
-        System.out.println( "Total solution Cost : " + sol.getTotalCost( ) );
+        //System.out.println( "Total solution Cost : " + sol.getTotalCost( ) );
         return sol;
     }
 
@@ -428,7 +431,7 @@ public class SolutionGenerator
 
         // While the ring Size is within ring size limit
         boolean noMoreNodes = false;
-        while ( currentRing.getSize( ) < Constants.initMaxLocalRingSize && !noMoreNodes )
+        while ( currentRing.getSize( ) < vnsSettings.getInitMaxLRSize() && !noMoreNodes )
         {
             List<AdjNode> adjList = nodeAdjacencies.getAdjList( currentNodeName ); // Get adjacent node for the current
                                                                                    // node
@@ -496,7 +499,7 @@ public class SolutionGenerator
                 ringComplete = true;
                 break;
             }
-            else if ( ringSize < Constants.initMaxLocalRingSize-1 )
+            else if ( ringSize < vnsSettings.getInitMaxLRSize()-1 )
             {
                 List<String> nodesToRemove = QaRsapUtils.nodesToRemove( currentRing, null, rings, new String[] {
                         lastNodeName, currentRing.getSpecificNodeName( 0 ) } );
@@ -504,7 +507,7 @@ public class SolutionGenerator
                                                                             nodesToRemove);
 
                 if ( returnedNodes != null
-                                && returnedNodes.get( 0 ).getPathFromRoot( ).size( ) < (Constants.maxLocalRingSize - ringSize) )
+                                && returnedNodes.get( 0 ).getPathFromRoot( ).size( ) < (vnsSettings.getMaxLocalRingSize() - ringSize) )
                 {
                     DijkstraNode returnedNode = returnedNodes.get( 0 );
                     List<String> pathList = returnedNode.getPathFromRoot( );

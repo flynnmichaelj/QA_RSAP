@@ -24,7 +24,7 @@ import de.zib.sndlib.network.Network;
  */
 public class InputFileHandler
 {
-    public static Network loadInput(String fileName)
+    public Network loadInput(String fileName)
     {
         JAXBContext jc = null;
         Unmarshaller unmarshaller = null;
@@ -39,9 +39,16 @@ public class InputFileHandler
         }
         catch ( JAXBException e )
         {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }      
+            System.out.println("Invalid input file: " + fileName);
+            System.out.println(e.getMessage());
+            return null;
+        } 
+        catch ( NullPointerException npe )
+        {
+            System.out.println("Invalid input file: " + fileName);
+            System.out.println(npe.getMessage());
+            return null;
+        }
                 
         return network;
     }

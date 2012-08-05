@@ -10,15 +10,22 @@
  */
 package ie.ucd.mscba.qa_rsap;
 
-import ie.ucd.mscba.qa_rsap.filehandlers.InputFileHandler;
 import ie.ucd.mscba.qa_rsap.processor.NeighbourGenerator;
 import ie.ucd.mscba.qa_rsap.processor.SolutionGenerator;
+import ie.ucd.mscba.qa_rsap.settings.AnnealSettings;
+import ie.ucd.mscba.qa_rsap.settings.AppSettings;
+import ie.ucd.mscba.qa_rsap.settings.VNSSettings;
 import ie.ucd.mscba.qa_rsap.valueobjects.NodeAdjacencies;
 import ie.ucd.mscba.qa_rsap.valueobjects.OCC;
 import ie.ucd.mscba.qa_rsap.valueobjects.OCCChangeHolder;
 import ie.ucd.mscba.qa_rsap.valueobjects.Solution;
 
 import java.util.List;
+
+import org.eclipse.swt.widgets.Button;
+import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.ProgressBar;
+import org.eclipse.swt.widgets.Text;
 
 import de.zib.sndlib.network.Link;
 import de.zib.sndlib.network.Network;
@@ -30,24 +37,38 @@ import de.zib.sndlib.network.Node;
 public class QaRsapController
 {
     //Global Variables
-    OCC occ = new OCC();
-    Solution[] perSearchBest = new Solution[Constants.NUM_SEARCHES];
+    private OCC occ                 = null;
+    Solution[] perSearchBest        = null;
+    AnnealSettings annealSettings   = null;
+    VNSSettings vnsSetting          = null;
+    Text outputArea                 = null; 
+    Display display                 = null; 
+    ProgressBar progressBarO         = null;
+    ProgressBar progressBarS         = null;
     
-    public void runQaRsap(String fileName)
+    private boolean stopRequested = false;
+    
+    public void setUIComponents(Text outputArea, Display display, ProgressBar progressBarO,  ProgressBar progressBarS)
     {
-        //Set a default file name if none exists
-        if(fileName == null)
-            fileName = "resources/dfn-bwin.xml";
-            //fileName = "resources/atlanta.xml";
-            //fileName = "resources/newyork.xml";
-            //fileName = "resources/germany50.xml";
-            //fileName = "resources/pioro40.xml";
-       
+        this.outputArea = outputArea;
+        this.display = display;
+        this.progressBarO = progressBarO;
+        this.progressBarS = progressBarS;
+    }
+    
+    public void runQaRsap(Network network, AppSettings appSettings)
+    {
+        annealSettings = appSettings.getAnnealSettings();
+        vnsSetting = appSettings.getVnsSettings();
+        occ = new OCC(annealSettings.getTrotterSlices());
+        
+        perSearchBest = new Solution[annealSettings.getNumSearches()];
+        
         //===========================================================
         //(1)    Build Network Object representation from input file
         //===========================================================
         //Build Network Object representation from input file
-        Network network = InputFileHandler.loadInput(fileName);
+       //Network network = InputFileHandler.loadInput(fileName);
         List<Link> networkLinks = network.getNetworkStructure( ).getLinks( ).getLink( );
         List<Node> networkNodes = network.getNetworkStructure( ).getNodes( ).getNode( );
         
@@ -64,17 +85,18 @@ public class QaRsapController
         //(2)   Generate initial Solutions
         //===================================
         
-        SolutionGenerator qaRsapProcessor = new SolutionGenerator(network, nodeAdjacencies);
-        //Solution initSol = null;
-        Solution[] initialSolutions = new Solution[Constants.NUM_SEARCHES];
-        for(int i=0; i<Constants.NUM_SEARCHES; i++ )
+        SolutionGenerator qaRsapProcessor = new SolutionGenerator(network, nodeAdjacencies, vnsSetting);
+        
+        updateResultsPanel("Genrating initial Soltutions.", false, display, outputArea);
+        
+        Solution[] initialSolutions = new Solution[annealSettings.getNumSearches()];
+        for(int i=0; i<annealSettings.getNumSearches(); i++ )
         {
             
             Solution thisInitSol  = null;
             int initSolCounter = 1;
             while(thisInitSol == null && initSolCounter <= 10)
             {
-                System.out.println("Generate Initital Soluotion: ATTEMPT:" + initSolCounter);
                 thisInitSol = qaRsapProcessor.getInitialSolution();
                 if(thisInitSol != null)
                 {
@@ -82,7 +104,7 @@ public class QaRsapController
                     boolean valid = thisInitSol.validate(nodeAdjacencies, networkNodes.size( ));
                     if(!valid)
                     {
-                        System.out.println("ERROR: INIT SOLUTION NOT VALID");
+                        //System.out.println("ERROR: INIT SOLUTION NOT VALID");
                         thisInitSol = null;
                     }
                 }
@@ -92,6 +114,8 @@ public class QaRsapController
             {
                 initialSolutions[i] = thisInitSol; //TODO
                 perSearchBest[i] = thisInitSol;
+                updateResultsPanel("Initial Solution " + (i+1) + " Found", true, display, outputArea);
+                
             }
             else
                 i--;
@@ -107,16 +131,16 @@ public class QaRsapController
         //=====================================
        
         //Annealing properteis
-        int n_ann_q = (int)(Constants.INITIAL_QUANTUM_FLUCTUATION/Constants.QUANTUM_FLUCTUATION_STEP);
-        int n_ann_c = (int)(Constants.INITIAL_TEMPERATURE/Constants.TEMPERATURE_STEP);
+        int n_ann_q = (int)(annealSettings.getInitQAfluct()/annealSettings.getQaFluctSteps());
+        int n_ann_c = (int)(annealSettings.getInitSATemp()/annealSettings.getSaDeltaTemp());
         int n_ann = 0;
         double temp = 0.0;
         double gam = 0.0;
 
-        if(Constants.TROTTER_NUMBER != 1) 
+        if(annealSettings.getTrotterSlices() != 1) 
         {
             n_ann = n_ann_q;
-            temp = Constants.INITIAL_TEMPERATURE;
+            temp = annealSettings.getQaTemp();
         }
         else
         {
@@ -124,55 +148,60 @@ public class QaRsapController
             gam = 0.0;
         }
         
-        for(int iSearch=0; iSearch< Constants.NUM_SEARCHES; iSearch++)
+        for(int iSearch=0; iSearch< annealSettings.getNumSearches(); iSearch++)
         {
-            Solution[] solutionsForAnnealing = new Solution[Constants.TROTTER_NUMBER];
+            //Stops the proccess if requested by the user
+            if(stopRequested)
+                return;
             
-            for(int j =0; j< Constants.TROTTER_NUMBER; j++)
+            Solution[] solutionsForAnnealing = new Solution[annealSettings.getTrotterSlices()];
+            
+            for(int j = 0; j < annealSettings.getTrotterSlices(); j++)
             {
                 solutionsForAnnealing[j] = perSearchBest[iSearch];              
             }
             
             //TODO May need array[trotterSlices] to assign cost for each slice of a solution
                      
-            if(Constants.TROTTER_NUMBER != 1) 
+            if(annealSettings.getTrotterSlices() != 1) 
             {
                 occ.getOCC( perSearchBest[iSearch], networkNodes.size());
             }
             
             int iann = n_ann;
             Solution annealedSol = null;
-            System.out.println("====================Search " + iSearch + "======================");
+            updateResultsPanel("Search " + (iSearch+1) , true, display, outputArea);
             while( iann > 0) /// main annealing loop
             {  
-                if(Constants.TROTTER_NUMBER != 1) 
+                if(annealSettings.getTrotterSlices() != 1) 
                 {
-                   gam = Constants.INITIAL_QUANTUM_FLUCTUATION*(double)(iann/(double)n_ann);   //! quantum annealing (gam->0);
+                   gam = annealSettings.getInitQAfluct()*(double)(iann/(double)n_ann);   //! quantum annealing (gam->0);
                 }
                 else
                 {
-                   temp = Constants.INITIAL_TEMPERATURE*(double)(iann/(double)n_ann);  //! classical annealing (temp->0);
+                   temp = annealSettings.getInitSATemp()*(double)(iann/(double)n_ann);  //! classical annealing (temp->0);
                 }
-                //System.out.println("Called anneal for iann:" + iann + " @ Temp: " + temp + " @ Gam: " + gam);
-                anneal(networkLinks, solutionsForAnnealing, nodeAdjacencies,  network, temp, gam, Constants.MCS_AT_STEP, iSearch) ; 
-               // System.out.println("Finished anneal for iann:" + iann);
+                anneal(networkLinks, solutionsForAnnealing, nodeAdjacencies,  network, temp, gam, annealSettings.getMcsSteps(), iSearch) ; 
                 
                 iann--;
+                double calcForProgessBar = ((double)n_ann-iann)/n_ann;
+                updateProgressBar((calcForProgessBar*100) , display, progressBarS);
             } 
-            if(Constants.TROTTER_NUMBER != 1) 
+            if(annealSettings.getTrotterSlices() != 1) 
             {
                 gam = 0.000000001;     // last step of quantum annealing at gam=0 (Well, almost zero)
-                //System.out.println("Called final anneal for iSearch:" + iSearch);
-                anneal(networkLinks, solutionsForAnnealing, nodeAdjacencies,  network, temp, gam, Constants.MCS_AT_STEP, iSearch) ;
-                //System.out.println("Finished final anneal for iSearch:" + iSearch);
+                anneal(networkLinks, solutionsForAnnealing, nodeAdjacencies,  network, temp, gam, annealSettings.getMcsSteps(), iSearch) ;
             }
+            
+            double calcForProgessBar = (iSearch+1)/(double)annealSettings.getNumSearches();
+            updateProgressBar((calcForProgessBar*100) , display, progressBarO);
         }
         
         //finished Annealing
         //find the best of each search for one overall best
         Solution overAllBestSol = null;
         double overAllBestCost = Double.POSITIVE_INFINITY;
-        for(int i = 0; i<Constants.NUM_SEARCHES; i++)
+        for(int i = 0; i<annealSettings.getNumSearches(); i++)
         {
             if(perSearchBest[i].getTotalCost( ) < overAllBestCost)
             {
@@ -183,13 +212,16 @@ public class QaRsapController
         //(4)   Output final results
         //===================================
         
-        System.out.println( "============= Overall Best Sol =============" );
-        overAllBestSol.printLocalRing( );
-        overAllBestSol.printSpurs( );
-        System.out.println( "Total Local Rings and Spurs Cost:" + overAllBestSol.getLocalRingAndSpursCost( ));
-        overAllBestSol.printTertiaryRing( );
-        System.out.println( "Cost:" + overAllBestSol.getTotalCost( ) );
-        System.out.println( "============= Overall Best Sol  =============" );
+        if(!stopRequested)
+        {
+            updateResultsPanel("============= Overall Best Sol =============", true, display, outputArea);
+            updateResultsPanel(overAllBestSol.printLocalRing( ), true, display, outputArea);
+            updateResultsPanel(overAllBestSol.printSpurs( ), true, display, outputArea);
+            updateResultsPanel("Total Local Rings and Spurs Cost:" + overAllBestSol.getLocalRingAndSpursCost( ), true, display, outputArea);
+            updateResultsPanel(overAllBestSol.printTertiaryRing( ), true, display, outputArea);
+            updateResultsPanel("Overall Cost:" + overAllBestSol.getTotalCost( ), true, display, outputArea);
+            updateResultsPanel("============= Overall Best Sol  =============", true, display, outputArea);
+        }
 
         //GraphView view = new GraphView();
         //view.drawGraph(overAllBestSol);
@@ -203,11 +235,11 @@ public class QaRsapController
         double totalAcc = 0.0; 
         double badAcc = 0.0;
         double badGenerated = 0.0;
-        double beta = 1.0/((Constants.TROTTER_NUMBER) * temp);
+        double beta = 1.0/((annealSettings.getTrotterSlices()) * temp);
         
-        if(Constants.TROTTER_NUMBER != 1) 
+        if(annealSettings.getTrotterSlices() != 1) 
         {
-            betaTrotter = -Math.log(Math.tanh(gam/((Constants.TROTTER_NUMBER) * temp)));
+            betaTrotter = -Math.log(Math.tanh(gam/((annealSettings.getTrotterSlices()) * temp)));
             //!b_tr = -0.5*LOG(COSH(gam/(DBLE(trot) * temp)))        //experiment with slightly modified interaction between slices  
         }
         else
@@ -216,15 +248,23 @@ public class QaRsapController
         }
         
         //Setup Neighbourhood search generator
-        NeighbourGenerator ng = new NeighbourGenerator(nodeAdjacencies, network);
+        NeighbourGenerator ng = new NeighbourGenerator(nodeAdjacencies, network, vnsSetting);
 
         for (int istep = 0; istep<nmcs ; istep++)                 // loop over number of searches
         {
+           //Stops the proccess if requested by the user
+            if(stopRequested)
+                return;
+            
             //for (int j = 0; j<network.getNetworkStructure( ).getNodes( ).getNode( ).size( ) ; j++) //TODO Our Run by time within VNS may cater for this       
             //{
-                for (int k = 0; k<Constants.TROTTER_NUMBER ; k++)           // loop over Trotter slices      
+                for (int k = 0; k<annealSettings.getTrotterSlices(); k++)           // loop over Trotter slices      
                 {
-                    System.out.println("Entered Trotter slice: " + k + "For nmcs: " + istep);
+                   //Stops the proccess if requested by the user
+                    if(stopRequested)
+                        return;
+                    
+                    //System.out.println("Entered Trotter slice: " + k + "For nmcs: " + istep);
                     //Solution bestSolSoFar = currrentSliceSolutions[k];                
                     Solution vnsResult = currrentSliceSolutions[k];
             
@@ -297,7 +337,7 @@ public class QaRsapController
                     double change = 0;
                     
                     OCCChangeHolder changHolder = null;
-                    if(Constants.TROTTER_NUMBER != 1) 
+                    if(annealSettings.getTrotterSlices() != 1) 
                     {
                        changHolder = occ.occChange( k, currrentSliceSolutions[k], vnsResult );
                        change = changHolder.getChangem( ) + changHolder.getChangep( );
@@ -309,14 +349,14 @@ public class QaRsapController
                         currrentSliceSolutions[k] = vnsResult;
                         
                         // in case of QA update the occupation numbers
-                        if(Constants.TROTTER_NUMBER != 1) 
+                        if(annealSettings.getTrotterSlices() != 1) 
                         {
                             occ.updateOCC( vnsResult, network.getNetworkStructure( ).getNodes( ).getNode( ).size( ), k );
                             if(k!=0) 
                             {
                                 occ.getDiffOcc( )[k-1] = occ.getDiffOcc( )[k-1] + changHolder.getChangem();
                             }
-                            if(k!=Constants.TROTTER_NUMBER-1) 
+                            if(k!=annealSettings.getTrotterSlices()-1) 
                             {
                                 occ.getDiffOcc( )[k]   = occ.getDiffOcc( )[k]   + changHolder.getChangep( );
                             }
@@ -335,14 +375,14 @@ public class QaRsapController
             //}           
         }
         
-        totalAcc = totalAcc/((double)nmcs*(double)Constants.TROTTER_NUMBER);  
+        totalAcc = totalAcc/((double)nmcs*(double)annealSettings.getTrotterSlices());  
         badAcc = badAcc/badGenerated;  
         //System.out.println("Total acceptance:" + totalAcc + " | Bad Sol acceptance:" + badAcc);
     }
     
     private Solution invokeVNS(Solution inputSol, long runTimes, int neighbourhoodSearch, List<Link> networkLinks, NeighbourGenerator ng, NodeAdjacencies adjList)
     {
-        System.out.println( "VNS:" + neighbourhoodSearch + ". Run times:" + runTimes);
+        //System.out.println( "VNS:" + neighbourhoodSearch + ". Run times:" + runTimes);
         Solution nsHolder = null;
         Solution bestVNSSol = null;
         double bestVNSCost = Double.POSITIVE_INFINITY;
@@ -379,5 +419,41 @@ public class QaRsapController
             }                  
         }      
         return bestVNSSol;
+    }
+    
+    private void updateResultsPanel(final String text, final boolean newLine, Display display, final Text outputArea)
+    {
+        //We do not depend on the result so we can use aasyncExec.
+        //This just dispatched the event and does not wait for a response
+        display.asyncExec (new Runnable () {
+           public void run () {
+              if (!outputArea.isDisposed())
+              {
+                  if(newLine)
+                  {
+                      outputArea.append("\r\n");
+                  }
+                  outputArea.append(text);
+              }
+           }
+        });
+    }
+    
+    private void updateProgressBar(final double value, Display display, final ProgressBar progressBar)
+    {
+        //We do not depend on the result so we can use aasyncExec.
+        //This just dispatched the event and does not wait for a response
+        display.asyncExec (new Runnable () {
+           public void run () {
+              if (!progressBar.isDisposed())
+              {
+                  progressBar.setSelection((int)value);
+              }
+           }
+        });
+    }
+    public void stop(boolean stop)
+    {
+        stopRequested = true;
     }
 }

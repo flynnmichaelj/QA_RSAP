@@ -14,6 +14,7 @@ package ie.ucd.mscba.qa_rsap.processor;
 import ie.ucd.mscba.qa_rsap.Constants;
 import ie.ucd.mscba.qa_rsap.dijkstra.Dijkstra;
 import ie.ucd.mscba.qa_rsap.dijkstra.DijkstraNode;
+import ie.ucd.mscba.qa_rsap.settings.VNSSettings;
 import ie.ucd.mscba.qa_rsap.utils.QaRsapUtils;
 import ie.ucd.mscba.qa_rsap.valueobjects.AdjNode;
 import ie.ucd.mscba.qa_rsap.valueobjects.NodeAdjacencies;
@@ -37,23 +38,25 @@ import de.zib.sndlib.network.Node;
  */
 public class NeighbourGenerator
 {
-    NodeAdjacencies nodeAdjacencies;
-    Network         network;
-    List<Link>      networkLinks;
-    List<Node>      networkNodes;
-    Dijkstra        dijkstra;
+    private NodeAdjacencies nodeAdjacencies = null;
+    private Network         network         = null;
+    private List<Link>      networkLinks    = null;
+    private List<Node>      networkNodes    = null;
+    private Dijkstra        dijkstra        = null;
+    private VNSSettings     vnsSettings     = null;
 
     /**
      * NeighbourGenerator constructor that accepts the network model and the adjacency matrix for all nodes in the
      * network.
      */
-    public NeighbourGenerator(NodeAdjacencies nodeAdjacencies, Network network)
+    public NeighbourGenerator(NodeAdjacencies nodeAdjacencies, Network network, VNSSettings vnsSettings)
     {
         this.nodeAdjacencies = nodeAdjacencies;
         this.network = network;
         this.networkLinks = network.getNetworkStructure().getLinks().getLink();
         this.networkNodes = network.getNetworkStructure().getNodes().getNode();
         this.dijkstra = new Dijkstra(this.networkNodes, this.nodeAdjacencies);
+        this.vnsSettings = vnsSettings;
     }
 
     /**
@@ -79,7 +82,7 @@ public class NeighbourGenerator
                 AdjNode thisClosest = spurAdjs.get(i);
                 Node thisClosestNode = QaRsapUtils.getNodeById(thisClosest.getNodeName(), networkNodes);
                 Ring closestRing = QaRsapUtils.getRingByNode(thisClosestNode, localRings);
-                if(closestRing != null && closestRing.getSize() < Constants.maxLocalRingSize - 1)
+                if(closestRing != null && closestRing.getSize() < vnsSettings.getMaxLocalRingSize() - 1)
                 {
                     int positionOfClosestNode = findNodePosOnRing(closestRing, thisClosestNode);
 
@@ -169,7 +172,7 @@ public class NeighbourGenerator
         // Validate soluton
         if(! clonedSol.validate(nodeAdjacencies, networkNodes.size()))
         {
-            System.out.println("ERROR SPLIT LOCAL RING SEARCH: SOLUTION NOT VALID");
+            //System.out.println("ERROR SPLIT LOCAL RING SEARCH: SOLUTION NOT VALID");
         }
         return clonedSol;
     }
@@ -257,7 +260,7 @@ public class NeighbourGenerator
                     {
                         tempNodeList.remove(spur.getSpurNode());
                     }
-                    SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies);
+                    SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
                     Ring tertiaryRing = solGenerator.generateTertiaryRing(clonedSol.getSpurs(), clonedSol.getLocalrings());
                     if(tertiaryRing != null)
                     {
@@ -311,7 +314,7 @@ public class NeighbourGenerator
         // Validate soluton
         if(! clonedSol.validate(nodeAdjacencies, networkNodes.size()))
         {
-            System.out.println("ERROR SPLIT LOCAL RING SEARCH: SOLUTION NOT VALID");
+            //System.out.println("ERROR SPLIT LOCAL RING SEARCH: SOLUTION NOT VALID");
         }
         return clonedSol;
     }
@@ -376,7 +379,7 @@ public class NeighbourGenerator
                     {
                         // Failed to find path
                         clonedSol.setTertiaryRing(null);
-                        SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies);
+                        SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
                         tertiaryRing = solGenerator.generateTertiaryRing(spurs, localRings);
                         if(tertiaryRing != null)
                         {
@@ -385,7 +388,7 @@ public class NeighbourGenerator
                         }
                         else
                         {
-                            System.out.println("Failed to genrerate new sol, Returning original");
+                            //System.out.println("Failed to genrerate new sol, Returning original");
                             return sol; // Cannot complete search, return original unchanged solution to avoid
                                         // corruption.
                         }
@@ -411,7 +414,7 @@ public class NeighbourGenerator
                 if(tertiaryRing == null)
                 {
                     clonedSol.setTertiaryRing(null);
-                    SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies);
+                    SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
                     tertiaryRing = solGenerator.generateTertiaryRing(spurs, localRings);
                     if(tertiaryRing != null)
                     {
@@ -447,7 +450,7 @@ public class NeighbourGenerator
                 else
                 {
                     clonedSol.setTertiaryRing(null);
-                    SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies);
+                    SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
                     tertiaryRing = solGenerator.generateTertiaryRing(spurs, localRings);
                     if(tertiaryRing != null)
                     {
@@ -467,7 +470,7 @@ public class NeighbourGenerator
             if(tertiaryRing.getSize() == 1)
             {
                 clonedSol.setTertiaryRing(null);
-                SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies);
+                SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
                 tertiaryRing = solGenerator.generateTertiaryRing(spurs, localRings);
                 if(tertiaryRing != null)
                 {
@@ -486,7 +489,7 @@ public class NeighbourGenerator
                 if(! success)
                 {
                     clonedSol.setTertiaryRing(null);
-                    SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies);
+                    SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
                     tertiaryRing = solGenerator.generateTertiaryRing(spurs, localRings);
                     if(tertiaryRing != null)
                     {
@@ -504,7 +507,7 @@ public class NeighbourGenerator
         boolean valid1 = clonedSol.validate(nodeAdjacencies, networkNodes.size());
         if(! valid1)
         {
-            System.out.println("ERROR TERTIARY RING SEARCH: SOLUTION NOT VALID");
+            //System.out.println("ERROR TERTIARY RING SEARCH: SOLUTION NOT VALID");
         }
 
         return clonedSol;
@@ -525,7 +528,7 @@ public class NeighbourGenerator
             Ring selectedRing = null; // Focus on rings the breach max size constraint
             for(Ring ring : localRings)
             {
-                if(ring.getSize() > Constants.maxLocalRingSize)
+                if(ring.getSize() > vnsSettings.getMaxLocalRingSize())
                 {
                     selectedRing = ring;
                     break;
@@ -561,7 +564,7 @@ public class NeighbourGenerator
             List<Ring> clonedListforIns = new ArrayList<Ring>();
             for(Ring ring : localRings)
             {
-                if(ring != selectedRing && ring.getSize() < Constants.maxLocalRingSize)
+                if(ring != selectedRing && ring.getSize() < vnsSettings.getMaxLocalRingSize())
                     clonedListforIns.add(ring);
             }
 
@@ -640,7 +643,7 @@ public class NeighbourGenerator
             {
                 List<Node> currentRingNodes = ring.getNodes();
                 if((currentRingNodes).contains(closestNode) && ! (currentRingNodes).contains(insertNode)
-                                && ring.getSize() < Constants.maxLocalRingSize)
+                                && ring.getSize() < vnsSettings.getMaxLocalRingSize())
                 {
                     parentRing = ring;
                     noSolutionRing = false;
@@ -764,7 +767,7 @@ public class NeighbourGenerator
         boolean valid = clonedSol.validate(nodeAdjacencies, networkNodes.size());
         if(! valid)
         {
-            System.out.println("ERROR DELETE INSERT SEARCH: SOLUTION NOT VALID");
+            //System.out.println("ERROR DELETE INSERT SEARCH: SOLUTION NOT VALID");
         }
 
         return clonedSol;
@@ -925,7 +928,7 @@ public class NeighbourGenerator
         boolean valid = clonedSol.validate(nodeAdjacencies, networkNodes.size());
         if(! valid)
         {
-            System.out.println("ERROR NODE SWAP SEARCH: SOLUTION NOT VALID");
+            //System.out.println("ERROR NODE SWAP SEARCH: SOLUTION NOT VALID");
         }
 
         return clonedSol;
@@ -953,7 +956,7 @@ public class NeighbourGenerator
             List<Node> retries = new ArrayList<Node>();
 
             Random rand = new Random();
-            SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies);
+            SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
             for(int i = 0; i < ringToDelete.getSize() - 1; i++)
             {
                 Node thisNode = ringToDelete.getNodes().get(i);
@@ -1004,7 +1007,7 @@ public class NeighbourGenerator
         boolean valid = clonedSol.validate(nodeAdjacencies, networkNodes.size());
         if(! valid)
         {
-            System.out.println("ERROR DELETE SMALL RING SEARCH: SOLUTION NOT VALID");
+            //System.out.println("ERROR DELETE SMALL RING SEARCH: SOLUTION NOT VALID");
         }
 
         // TODO handle hoe this affect the tertiary ring
@@ -1050,7 +1053,7 @@ public class NeighbourGenerator
                     else
                     {
                         // cannot find path back. Failed to build tertiray Ring
-                        System.out.println("1) failed to build tertiary ring in perturbe tertiary search");
+                        //System.out.println("1) failed to build tertiary ring in perturbe tertiary search");
                         return null;
                     }
                 }
@@ -1058,7 +1061,7 @@ public class NeighbourGenerator
             if(bestFirstNode == null || bestSecondNode == null)
             {
                 // cannot find path back. Failed to build tertiary Ring
-                System.out.println("1) failed to build tertiary ring in perturbe tertiary search");
+                //System.out.println("1) failed to build tertiary ring in perturbe tertiary search");
                 return null;
             }
             // Add paths of both dijkstra nodes to complete the ring
