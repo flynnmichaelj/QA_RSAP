@@ -14,41 +14,16 @@ package ie.ucd.mscba.qa_rsap;
  * 
  */
 public class Constants
-{
-    //public static int initMaxLocalRingSize = 10;
-    //public static int maxLocalRingSize = 12;
-    
-    
-    //public static int localRingCapcacityModule = 0;
-    //public static int tertiaryRingCapcacityModule = 0;
-    
-    //public static double spurPenaltyCost  = 7;
-    
-    //public static int NUM_SEARCHES = 20;
-    //public static int loopCount = 1;
-    
+{    
     public static int MIN_SIZE_FOR_SPLIT = 7;
     
-    //Probalilities for Rings
-    public static double prob_LR_DeleteInsert = 0.15;
-    public static double prob_LR_NodeSwap = 0.25;
-    public static double prob_LR_DeleteSmallRing = 0.35;
-    public static double prob_LR_Split = 0.4;
-    public static double prob_LR_InsertEdge = 0.45;
-    public static double prob_TR_perturbe = 0.5;
-    
-    public static double probMultipleRuns = 0.5;
-    
-   //Quantum annealing properties
-    //public static int TROTTER_NUMBER = 5;
-   //public static double INITIAL_QUANTUM_FLUCTUATION=5.0;
-   // public static double QUANTUM_FLUCTUATION_STEP=0.2;
-    //public static double INITIAL_TEMPERATURE=0.334;
-    //public static double TEMPERATURE_STEP=1.0;
-    //public static double INITIAL_TEMPERATURE=0.6;
-    //public static double TEMPERATURE_STEP=0.01;
-    //public static int MCS_AT_STEP=35;
-    //CLASSICAL_PREANNEALING=3 1 0.1
-    
+    //Probalilities for VNS
+    public static double PORB_LR_DELETE_INSERT = 0.15;
+    public static double PROB_LR_NODE_SWAP = 0.25;
+    public static double PROB_LR_DELETE_SMALL_RING = 0.35;
+    public static double PROB_LR_SPLIT = 0.4;
+    public static double PROB_LR_INSERT_EDGE = 0.45;
+    public static double PROB_TR_PERTURBE = 0.5;
+    public static double PROB_MULTIPLE_RUNS = 0.5;
     
 }

@@ -172,7 +172,9 @@ public class NeighbourGenerator
         // Validate soluton
         if(! clonedSol.validate(nodeAdjacencies, networkNodes.size()))
         {
-            //System.out.println("ERROR SPLIT LOCAL RING SEARCH: SOLUTION NOT VALID");
+            //validation error detected, returning original solution
+            System.out.println("validation error detected on edge inserion, returning original solution");
+            clonedSol=sol; 
         }
         return clonedSol;
     }
@@ -314,7 +316,9 @@ public class NeighbourGenerator
         // Validate soluton
         if(! clonedSol.validate(nodeAdjacencies, networkNodes.size()))
         {
-            //System.out.println("ERROR SPLIT LOCAL RING SEARCH: SOLUTION NOT VALID");
+            //validation error detected, returning original solution
+            System.out.println("validation error detected on split local ring, returning original solution");
+            clonedSol=sol; 
         }
         return clonedSol;
     }
@@ -504,232 +508,103 @@ public class NeighbourGenerator
             }
         }
         // Validate soluton
-        boolean valid1 = clonedSol.validate(nodeAdjacencies, networkNodes.size());
-        if(! valid1)
+        if(!clonedSol.validate(nodeAdjacencies, networkNodes.size()))
         {
-            //System.out.println("ERROR TERTIARY RING SEARCH: SOLUTION NOT VALID");
+            //validation error detected, returning original solution
+            System.out.println("validation error detected on tertiary ring search, returning original solution");
+            clonedSol=sol; 
         }
 
         return clonedSol;
     }
     
-    
-    public boolean deleteInsert(Solution clonedSol, Random rand)
+    /**
+     * Delete small ring search removes a ring of size 3 and attempts to reinsert its nodes nodes into other adjancet rings. If 
+     * any nodes fails to be added, the are stored and retried again a the end of the process.A subsequent node getting added may allow 
+     * for this unsuccessful node to be added at a later stage.
+     */
+    public Solution deleteSmallRingSearch(Solution sol)
     {
-        boolean success = false;
-
+        Solution clonedSol = sol.clone();
         List<Ring> localRings = clonedSol.getLocalrings();
-        boolean changeFound = false;
-        int maxTriesCounter = 0;
-        while(! changeFound && maxTriesCounter <= 10)
+        Ring ringToDelete = null;
+        for(Ring ring : localRings)
         {
-            maxTriesCounter++;
-
-            Ring selectedRing = null; // Focus on rings the breach max size constraint
-            for(Ring ring : localRings)
+            if(ring.getSize() == 4)
             {
-                if(ring.getSize() > vnsSettings.getMaxLocalRingSize())
+                ringToDelete = ring;
+                localRings.remove(ring);
+                break;
+            }
+        }
+        if(ringToDelete != null)
+        {
+            List<Node> retries = new ArrayList<Node>();
+
+            Random rand = new Random();
+            SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
+            for(int i = 0; i < ringToDelete.getSize() - 1; i++)
+            {
+                Node thisNode = ringToDelete.getNodes().get(i);
+                Spur spur = solGenerator.createSrup(thisNode, network.getNetworkStructure().getNodes().getNode(), localRings);
+                if(spur == null)
                 {
-                    selectedRing = ring;
-                    break;
-                }
-            }
-            if(selectedRing == null)
-            {
-                List<Ring> clonedListForDel = new ArrayList<Ring>();
-                for(Ring ring : localRings)
-                {
-                    if(ring.getSize() > 4)
-                        clonedListForDel.add(ring);
-                }
-                if(clonedListForDel.size() > 0)
-                    selectedRing = clonedListForDel.get(rand.nextInt(clonedListForDel.size()));
-                else
-                    break; // TODO consider catering for many small rings by deleting one ring
-            }
-
-            boolean notOnTertiaryRing = false;
-            Node selectedNode = null;
-            int nodeMaxTries = 0;
-            while(clonedSol.getTertiaryRing() != null && ! notOnTertiaryRing && nodeMaxTries < 20)
-            {
-                nodeMaxTries++;
-                selectedNode = selectedRing.getNodes().get(rand.nextInt(selectedRing.getNodes().size()));
-                if(! QaRsapUtils.isNodeOnRing(selectedNode, clonedSol.getTertiaryRing()))
-                    notOnTertiaryRing = true;
-            }
-            if(selectedNode == null)
-                continue;
-
-            List<Ring> clonedListforIns = new ArrayList<Ring>();
-            for(Ring ring : localRings)
-            {
-                if(ring != selectedRing && ring.getSize() < vnsSettings.getMaxLocalRingSize())
-                    clonedListforIns.add(ring);
-            }
-
-            Ring modifiedRing = insert(selectedNode, clonedListforIns);
-            if(modifiedRing != null)
-            {
-                if(delete(selectedNode, selectedRing))
-                {
-                    changeFound = true;
-                    success = true;
+                    retries.add(thisNode);
                 }
                 else
                 {
-                    // Delete failed so remove from inserted ring to avoid corrupting solution
-                    if(! delete(selectedNode, modifiedRing))
+                    Ring modifiedRing = insert(spur.getSpurNode(), localRings);
+                    if(modifiedRing == null)
                     {
-                        // if remove also fails, end search and return original sol to avoid corruption
-                        return false;
+                        retries.add(thisNode);
+                    }
+                }
+            }
+
+            // Handle possible retries
+            for(int i = 0; i < retries.size(); i++)
+            {
+                Node thisNode = retries.get(i);
+                Spur spur = solGenerator.createSrup(thisNode, network.getNetworkStructure().getNodes().getNode(), localRings);
+                if(spur == null)
+                {
+                    // Fail Gracefully by return original sol
+                    return sol;
+                }
+                else
+                {
+                    Ring modifiedRing = insert(spur.getSpurNode(), localRings);
+                    if(modifiedRing == null)
+                    {
+                        // Fail Gracefully by return original sol
+                        return sol;
                     }
                 }
             }
         }
-        return success;
+        //if Successful and only one ring remains, remove the tertiarty Ring
+        if(clonedSol.getLocalrings().size() == 1)
+        {
+            clonedSol.setTertiaryRing(null);
+        }
+        
+        // Validate soluton
+        if(! clonedSol.validate(nodeAdjacencies, networkNodes.size()))
+        {
+            //validation error detected, returning original solution
+            System.out.println("validation error detected on delete small ring search, returning original solution");
+            clonedSol=sol; 
+        }
+
+        // TODO handle hoe this affect the tertiary ring
+        return clonedSol;
     }
-
-    public boolean delete(Node deleteNode, Ring deleteRing)
-    {
-        boolean completedSucessfully = false;
-
-        int positionOnRing = findNodePosOnRing(deleteRing, deleteNode);
-        Node leftNode = null;
-        Node rightNode = null;
-        if(positionOnRing == 0)
-        {
-            leftNode = deleteRing.getNodes().get(1);
-            rightNode = deleteRing.getNodes().get((deleteRing.getNodes().size()) - 2);
-        }
-        else
-        {
-            leftNode = deleteRing.getNodes().get(positionOnRing - 1);
-            rightNode = deleteRing.getNodes().get(positionOnRing + 1);
-        }
-        if(QaRsapUtils.isAdj(leftNode.getId(), nodeAdjacencies.getAdjList(rightNode.getId())))
-        {
-            if(positionOnRing == 0)
-            {
-                deleteRing.getNodes().remove(0); // Check this
-                deleteRing.getNodes().remove(deleteRing.getSize() - 1);
-                Node startNode = deleteRing.getNodes().get(0);
-                deleteRing.getNodes().add(deleteRing.getSize(), startNode);
-            }
-            else
-            {
-                deleteRing.removeNode(deleteNode);
-            }
-            completedSucessfully = true;
-        }
-        return completedSucessfully;
-    }
-
-    public Ring insert(Node insertNode, List<Ring> rings)
-    {
-        Ring modifiedRing = null;
-
-        List<AdjNode> adjList = nodeAdjacencies.getAdjList(insertNode.getId());
-        Iterator<AdjNode> iter = adjList.iterator();
-
-        while(iter.hasNext())
-        {
-            boolean noSolutionRing = true;
-            AdjNode currentAdjNode = iter.next();
-            Node closestNode = QaRsapUtils.getNodeById(currentAdjNode.getNodeName(), network.getNetworkStructure().getNodes()
-                            .getNode());
-            Ring parentRing = null;
-            for(Ring ring : rings)
-            {
-                List<Node> currentRingNodes = ring.getNodes();
-                if((currentRingNodes).contains(closestNode) && ! (currentRingNodes).contains(insertNode)
-                                && ring.getSize() < vnsSettings.getMaxLocalRingSize())
-                {
-                    parentRing = ring;
-                    noSolutionRing = false;
-                    break;
-                }
-            }
-
-            if(noSolutionRing)
-                continue;
-
-            int positionOfClosestNode = findNodePosOnRing(parentRing, closestNode);
-
-            if(positionOfClosestNode == 0)
-            {
-                Node selecteNode = null;
-                Node firstAdj = parentRing.getNodes().get(1);
-                Node lastAdj = parentRing.getNodes().get((parentRing.getNodes().size()) - 2);
-
-                // Here we want to insert between the closest nodes and its next nearest node
-                double firstAdjCost = QaRsapUtils.isAdjCost(firstAdj.getId(), adjList);
-                double lastAdjCost = QaRsapUtils.isAdjCost(lastAdj.getId(), adjList);
-                if(firstAdjCost > 0.0 && lastAdjCost > 0.0)
-                {
-                    selecteNode = firstAdjCost < lastAdjCost ? firstAdj : lastAdj;
-                    if(selecteNode == firstAdj)
-                        parentRing.getNodes().add(1, insertNode);
-                    else
-                        parentRing.getNodes().add((parentRing.getNodes().size()) - 1, insertNode);
-
-                    modifiedRing = parentRing;
-                    break;
-                }
-                else if(firstAdjCost > 0.0 || lastAdjCost > 0.0)
-                {
-                    selecteNode = firstAdjCost > lastAdjCost ? firstAdj : lastAdj;
-                    if(selecteNode == firstAdj)
-                        parentRing.getNodes().add(1, insertNode);
-                    else
-                        parentRing.getNodes().add((parentRing.getNodes().size()) - 1, insertNode);
-
-                    modifiedRing = parentRing;
-                    break;
-                }
-                else
-                {
-                    continue;
-                }
-            }
-            else
-            {
-                Node selecteNode = null;
-                Node leftNode = parentRing.getNodes().get(positionOfClosestNode - 1);
-                Node rightNode = parentRing.getNodes().get(positionOfClosestNode + 1);
-                double leftCost = QaRsapUtils.isAdjCost(leftNode.getId(), adjList);
-                double rightCost = QaRsapUtils.isAdjCost(rightNode.getId(), adjList);
-                if(leftCost > 0.0 && rightCost > 0.0)
-                {
-                    selecteNode = leftCost < rightCost ? leftNode : rightNode;
-                    if(selecteNode == leftNode)
-                        parentRing.getNodes().add(positionOfClosestNode, insertNode);
-                    else
-                        parentRing.getNodes().add(positionOfClosestNode + 1, insertNode);
-
-                    modifiedRing = parentRing;
-                    break;
-                }
-                else if(leftCost > 0.0 || rightCost > 0.0)
-                {
-                    selecteNode = leftCost > rightCost ? leftNode : rightNode;
-                    if(selecteNode == leftNode)
-                        parentRing.getNodes().add(positionOfClosestNode, insertNode);
-                    else
-                        parentRing.getNodes().add(positionOfClosestNode + 1, insertNode);
-
-                    modifiedRing = parentRing;
-                    break;
-                }
-                else
-                {
-                    continue;
-                }
-            }
-        }
-        return modifiedRing;
-    }
-
+    
+    /**
+     * Delete insert search attempts two things. Firstly is focuses on spur node. It picks a spur node at random and attempts 
+     * to insert it into its closest ring. if there are no nodes left, this search attempts to remove a node from one ring a insert
+     * it into another ring.
+     */
     public Solution deleteInsertSearch(Solution sol)
     {
         Solution clonedSol = sol.clone();
@@ -764,15 +639,20 @@ public class NeighbourGenerator
         }
 
         // Validate soluton
-        boolean valid = clonedSol.validate(nodeAdjacencies, networkNodes.size());
-        if(! valid)
+        if(!clonedSol.validate(nodeAdjacencies, networkNodes.size()))
         {
-            //System.out.println("ERROR DELETE INSERT SEARCH: SOLUTION NOT VALID");
+            //validation error detected, returning original solution
+            System.out.println("validation error detected on delete inset search, returning original solution");
+            clonedSol=sol; 
         }
 
         return clonedSol;
     }
-
+    
+    /**
+     * Swap node search attempts to swap two nodes on two local ring. Like all other searches, much validation and
+     * consistency chceks are preformed to ensure that are node parties are correctly adjacent.
+     */
     public Solution swapNodeSearch(Solution sol)
     {
         Solution clonedSol = sol.clone();
@@ -925,95 +805,250 @@ public class NeighbourGenerator
         }
 
         // Validate soluton
-        boolean valid = clonedSol.validate(nodeAdjacencies, networkNodes.size());
-        if(! valid)
+        if(!clonedSol.validate(nodeAdjacencies, networkNodes.size()))
         {
-            //System.out.println("ERROR NODE SWAP SEARCH: SOLUTION NOT VALID");
+            //validation error detected, returning original solution
+            System.out.println("validation error detected on swap node search, returning original solution");
+            clonedSol=sol; 
         }
 
         return clonedSol;
     }
 
-    // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    // Delete small ring searches
-    // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    public Solution deleteSmallRingSearch(Solution sol)
+    /**
+     * This method is used by the deleteInsertSearch and attempts to delete a node from one ring and insert it into another ring. 
+     * Two local rings are modified in the process. Care is taken to allow node that are already on the tertiarty ring to avoid
+     * corrupting the solution.
+     */
+    public boolean deleteInsert(Solution clonedSol, Random rand)
     {
-        Solution clonedSol = sol.clone();
+        boolean success = false;
+
         List<Ring> localRings = clonedSol.getLocalrings();
-        Ring ringToDelete = null;
-        for(Ring ring : localRings)
+        boolean changeFound = false;
+        int maxTriesCounter = 0;
+        while(! changeFound && maxTriesCounter <= 10)
         {
-            if(ring.getSize() == 4)
-            {
-                ringToDelete = ring;
-                localRings.remove(ring);
-                break;
-            }
-        }
-        if(ringToDelete != null)
-        {
-            List<Node> retries = new ArrayList<Node>();
+            maxTriesCounter++;
 
-            Random rand = new Random();
-            SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
-            for(int i = 0; i < ringToDelete.getSize() - 1; i++)
+            Ring selectedRing = null; // Focus on rings the breach max size constraint
+            for(Ring ring : localRings)
             {
-                Node thisNode = ringToDelete.getNodes().get(i);
-                Spur spur = solGenerator.createSrup(thisNode, network.getNetworkStructure().getNodes().getNode(), localRings);
-                if(spur == null)
+                if(ring.getSize() > vnsSettings.getMaxLocalRingSize())
                 {
-                    retries.add(thisNode);
+                    selectedRing = ring;
+                    break;
+                }
+            }
+            if(selectedRing == null)
+            {
+                List<Ring> clonedListForDel = new ArrayList<Ring>();
+                for(Ring ring : localRings)
+                {
+                    if(ring.getSize() > 4)
+                        clonedListForDel.add(ring);
+                }
+                if(clonedListForDel.size() > 0)
+                    selectedRing = clonedListForDel.get(rand.nextInt(clonedListForDel.size()));
+                else
+                    break; // TODO consider catering for many small rings by deleting one ring
+            }
+
+            boolean notOnTertiaryRing = false;
+            Node selectedNode = null;
+            int nodeMaxTries = 0;
+            while(clonedSol.getTertiaryRing() != null && ! notOnTertiaryRing && nodeMaxTries < 20)
+            {
+                nodeMaxTries++;
+                selectedNode = selectedRing.getNodes().get(rand.nextInt(selectedRing.getNodes().size()));
+                if(! QaRsapUtils.isNodeOnRing(selectedNode, clonedSol.getTertiaryRing()))
+                    notOnTertiaryRing = true;
+            }
+            if(selectedNode == null)
+                continue;
+
+            List<Ring> clonedListforIns = new ArrayList<Ring>();
+            for(Ring ring : localRings)
+            {
+                if(ring != selectedRing && ring.getSize() < vnsSettings.getMaxLocalRingSize())
+                    clonedListforIns.add(ring);
+            }
+
+            Ring modifiedRing = insert(selectedNode, clonedListforIns);
+            if(modifiedRing != null)
+            {
+                if(delete(selectedNode, selectedRing))
+                {
+                    changeFound = true;
+                    success = true;
                 }
                 else
                 {
-                    Ring modifiedRing = insert(spur.getSpurNode(), localRings);
-                    if(modifiedRing == null)
+                    // Delete failed so remove from inserted ring to avoid corrupting solution
+                    if(! delete(selectedNode, modifiedRing))
                     {
-                        retries.add(thisNode);
-                    }
-                    // TODO Fix this
-                }
-            }
-
-            // Handle possible retries
-            for(int i = 0; i < retries.size(); i++)
-            {
-                Node thisNode = retries.get(i);
-                Spur spur = solGenerator.createSrup(thisNode, network.getNetworkStructure().getNodes().getNode(), localRings);
-                if(spur == null)
-                {
-                    // Fail Gracefully by return original sol
-                    return sol;
-                }
-                else
-                {
-                    Ring modifiedRing = insert(spur.getSpurNode(), localRings);
-                    if(modifiedRing == null)
-                    {
-                        // Fail Gracefully by return original sol
-                        return sol;
+                        // if remove also fails, end search and return original sol to avoid corruption
+                        return false;
                     }
                 }
             }
         }
-        //if Successful and only one ring remains, remove teh tertiarty Ring
-        if(clonedSol.getLocalrings().size() == 1)
-        {
-            clonedSol.setTertiaryRing(null);
-        }
-        
-        // Validate soluton
-        boolean valid = clonedSol.validate(nodeAdjacencies, networkNodes.size());
-        if(! valid)
-        {
-            //System.out.println("ERROR DELETE SMALL RING SEARCH: SOLUTION NOT VALID");
-        }
-
-        // TODO handle hoe this affect the tertiary ring
-        return clonedSol;
+        return success;
     }
 
+    /**
+     * This method deletes a node from a selected ring. The node can only be deleted if the nodes either side of it are
+     * adjancet. Otherwise the resulting local ring would not be valid.
+     */
+    public boolean delete(Node deleteNode, Ring deleteRing)
+    {
+        boolean completedSucessfully = false;
+
+        int positionOnRing = findNodePosOnRing(deleteRing, deleteNode);
+        Node leftNode = null;
+        Node rightNode = null;
+        if(positionOnRing == 0)
+        {
+            leftNode = deleteRing.getNodes().get(1);
+            rightNode = deleteRing.getNodes().get((deleteRing.getNodes().size()) - 2);
+        }
+        else
+        {
+            leftNode = deleteRing.getNodes().get(positionOnRing - 1);
+            rightNode = deleteRing.getNodes().get(positionOnRing + 1);
+        }
+        if(QaRsapUtils.isAdj(leftNode.getId(), nodeAdjacencies.getAdjList(rightNode.getId())))
+        {
+            if(positionOnRing == 0)
+            {
+                deleteRing.getNodes().remove(0); // Check this
+                deleteRing.getNodes().remove(deleteRing.getSize() - 1);
+                Node startNode = deleteRing.getNodes().get(0);
+                deleteRing.getNodes().add(deleteRing.getSize(), startNode);
+            }
+            else
+            {
+                deleteRing.removeNode(deleteNode);
+            }
+            completedSucessfully = true;
+        }
+        return completedSucessfully;
+    }
+
+    /**
+     * This method is used by delete insert search and aims to insert a chosen node into its closest ring.
+     * Adjaceny constrains are maintained. In addition, the location of the insert is important so assuming adjacent 
+     * on both sides, the side which will results in the smallest ring is chosen.
+     */
+    public Ring insert(Node insertNode, List<Ring> rings)
+    {
+        Ring modifiedRing = null;
+
+        List<AdjNode> adjList = nodeAdjacencies.getAdjList(insertNode.getId());
+        Iterator<AdjNode> iter = adjList.iterator();
+
+        while(iter.hasNext())
+        {
+            boolean noSolutionRing = true;
+            AdjNode currentAdjNode = iter.next();
+            Node closestNode = QaRsapUtils.getNodeById(currentAdjNode.getNodeName(), network.getNetworkStructure().getNodes()
+                            .getNode());
+            Ring parentRing = null;
+            for(Ring ring : rings)
+            {
+                List<Node> currentRingNodes = ring.getNodes();
+                if((currentRingNodes).contains(closestNode) && ! (currentRingNodes).contains(insertNode)
+                                && ring.getSize() < vnsSettings.getMaxLocalRingSize())
+                {
+                    parentRing = ring;
+                    noSolutionRing = false;
+                    break;
+                }
+            }
+
+            if(noSolutionRing)
+                continue;
+
+            int positionOfClosestNode = findNodePosOnRing(parentRing, closestNode);
+
+            if(positionOfClosestNode == 0)
+            {
+                Node selecteNode = null;
+                Node firstAdj = parentRing.getNodes().get(1);
+                Node lastAdj = parentRing.getNodes().get((parentRing.getNodes().size()) - 2);
+
+                // Here we want to insert between the closest nodes and its next nearest node
+                double firstAdjCost = QaRsapUtils.isAdjCost(firstAdj.getId(), adjList);
+                double lastAdjCost = QaRsapUtils.isAdjCost(lastAdj.getId(), adjList);
+                if(firstAdjCost > 0.0 && lastAdjCost > 0.0)
+                {
+                    selecteNode = firstAdjCost < lastAdjCost ? firstAdj : lastAdj;
+                    if(selecteNode == firstAdj)
+                        parentRing.getNodes().add(1, insertNode);
+                    else
+                        parentRing.getNodes().add((parentRing.getNodes().size()) - 1, insertNode);
+
+                    modifiedRing = parentRing;
+                    break;
+                }
+                else if(firstAdjCost > 0.0 || lastAdjCost > 0.0)
+                {
+                    selecteNode = firstAdjCost > lastAdjCost ? firstAdj : lastAdj;
+                    if(selecteNode == firstAdj)
+                        parentRing.getNodes().add(1, insertNode);
+                    else
+                        parentRing.getNodes().add((parentRing.getNodes().size()) - 1, insertNode);
+
+                    modifiedRing = parentRing;
+                    break;
+                }
+                else
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                Node selecteNode = null;
+                Node leftNode = parentRing.getNodes().get(positionOfClosestNode - 1);
+                Node rightNode = parentRing.getNodes().get(positionOfClosestNode + 1);
+                double leftCost = QaRsapUtils.isAdjCost(leftNode.getId(), adjList);
+                double rightCost = QaRsapUtils.isAdjCost(rightNode.getId(), adjList);
+                if(leftCost > 0.0 && rightCost > 0.0)
+                {
+                    selecteNode = leftCost < rightCost ? leftNode : rightNode;
+                    if(selecteNode == leftNode)
+                        parentRing.getNodes().add(positionOfClosestNode, insertNode);
+                    else
+                        parentRing.getNodes().add(positionOfClosestNode + 1, insertNode);
+
+                    modifiedRing = parentRing;
+                    break;
+                }
+                else if(leftCost > 0.0 || rightCost > 0.0)
+                {
+                    selecteNode = leftCost > rightCost ? leftNode : rightNode;
+                    if(selecteNode == leftNode)
+                        parentRing.getNodes().add(positionOfClosestNode, insertNode);
+                    else
+                        parentRing.getNodes().add(positionOfClosestNode + 1, insertNode);
+
+                    modifiedRing = parentRing;
+                    break;
+                }
+                else
+                {
+                    continue;
+                }
+            }
+        }
+        return modifiedRing;
+    }
+
+    /**
+     *This method is responsible for completing a tertiary which, at this point only has two nodes.
+     *A two node ring is invalid so another third node must be chosen before the ring can be completed. 
+     */
     private Ring reconnect2NodeTertiaryRingbyDijkstra(Ring tertiaryRing, List<Spur> clonedSolSpurs)
     {
         // Complete the ring
@@ -1077,6 +1112,11 @@ public class NeighbourGenerator
         return tertiaryRing;
     }
 
+    /**
+     * This method connect a currently disconnected local ring to the tertiary ring. A node on the ring is chosen at random and dijkstra is
+     * used to determine where on the tertiary ring this node should be placed.Again left side and right side of possible addition points
+     * are check to enusre the closest is selected.
+     */
     private boolean addLocalRingToTertiary(Ring tertiaryRing, Ring initRing, Random rand, List<Spur> spurs)
     {
         boolean succeeded = false;
@@ -1262,7 +1302,10 @@ public class NeighbourGenerator
         }
         return succeeded;
     }
-
+    
+    /**
+     * This is a utility method which returns the position of a node on its ring.
+     */
     private int findNodePosOnRing(Ring srcRing, Node currentNode)
     {
         int positionOfcurrentAdjNode = - 1;

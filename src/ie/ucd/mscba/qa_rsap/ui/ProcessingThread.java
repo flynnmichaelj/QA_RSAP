@@ -20,6 +20,7 @@ import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.ProgressBar;
 import org.eclipse.swt.widgets.Text;
+import org.openstreetmap.gui.jmapviewer.JMapViewer;
 
 import de.zib.sndlib.network.Network;
 
@@ -36,7 +37,8 @@ public class ProcessingThread  extends Thread //implements Runnable
     private Display display                 = null;
     private ProgressBar progressBarO        = null;
     private ProgressBar progressBarS        = null;
-    private Label lab_Timer               = null;
+    private Label lab_Timer                 = null;
+    private JMapViewer map                  = null;
     
     private Button start = null; 
     private Button stop  = null;
@@ -52,7 +54,7 @@ public class ProcessingThread  extends Thread //implements Runnable
         controller.stop(true);
     }
     public void setUIComponents(Button start, Button stop, Text outputArea, Display display, 
-                                ProgressBar progressBarO,  ProgressBar progressBarS, Long startTime, Label lab_Timer)
+                                ProgressBar progressBarO,  ProgressBar progressBarS, Long startTime, Label lab_Timer, JMapViewer map)
     {
         this.start = start;
         this.stop = stop;
@@ -62,6 +64,8 @@ public class ProcessingThread  extends Thread //implements Runnable
         this.progressBarS = progressBarS;
         this.startTime = startTime;
         this.lab_Timer = lab_Timer;
+        this.map = map;
+        
     }
 
     ProcessingThread(Network network, AppSettings appSettings) 
@@ -81,7 +85,7 @@ public class ProcessingThread  extends Thread //implements Runnable
             controller = new QaRsapController();   
             if(network != null)
             {
-                controller.setUIComponents(outputArea, display, progressBarO, progressBarS);
+                controller.setUIComponents(outputArea, display, progressBarO, progressBarS, map);
                 controller.runQaRsap(network, appSettings);
             }
             else
@@ -109,7 +113,7 @@ public class ProcessingThread  extends Thread //implements Runnable
                        if(minutes == 0)
                            sMinutes = "00";
                        else if(minutes < 9)
-                           sMinutes = "0"+String.valueOf(sMinutes);
+                           sMinutes = "0"+String.valueOf(minutes);
                        else
                            sMinutes = String.valueOf(minutes);
                        lab_Timer.setText("Total runtime : " + sMinutes +":" + sSeconds);

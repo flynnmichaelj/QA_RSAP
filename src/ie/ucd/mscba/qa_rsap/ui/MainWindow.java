@@ -12,13 +12,7 @@ package ie.ucd.mscba.qa_rsap.ui;
 
 import ie.ucd.mscba.qa_rsap.settings.AppSettings;
 
-import java.awt.Frame;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.awt.SWT_AWT;
 import org.eclipse.swt.custom.SashForm;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
@@ -33,17 +27,9 @@ import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.ProgressBar;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
-import org.openstreetmap.gui.jmapviewer.Coordinate;
-import org.openstreetmap.gui.jmapviewer.JMapViewer;
-import org.openstreetmap.gui.jmapviewer.MapMarkerDot;
-import org.openstreetmap.gui.jmapviewer.MapPolygonImpl;
-
-import de.zib.sndlib.network.Network;
 
 public class MainWindow
-{
-    private Network network = null;
-    
+{    
     private Button butt_start = null;
     private Button butt_stop = null;
     private ProgressBar progressBarO = null;
@@ -52,6 +38,7 @@ public class MainWindow
     private UIComponentMenuBars menuBars = null;
     private Text resultText = null;
     private ProcessingThread processThread = null;
+    private UIComponentMap mapComponent = null;
 
     private long stratTime = 0;
     
@@ -139,7 +126,7 @@ public class MainWindow
                 
         //Add the menu bar component
         menuBars = new UIComponentMenuBars();
-        ExpandBar menubar =  menuBars.buildMenu(menuSash, display, shell, network, butt_start);
+        ExpandBar menubar =  menuBars.buildMenu(menuSash, display, shell, butt_start);
         
         // Create the SashForm with vertical (Contains browser and results components)
         SashForm displaySash = new SashForm(menuSash, SWT.VERTICAL);
@@ -147,38 +134,12 @@ public class MainWindow
         displaySash.setLayout(menuSashLayout);
         displaySash.setLayoutData( new GridData( GridData.FILL, GridData.FILL, true, true ));
         
-        //Add Browser Component
-        //UIComponentBrowser browserComponent = new UIComponentBrowser( );
-        //Browser browser = browserComponent.buildBrowserComponent( displaySash );
-        //JMapViewer map = new JMapViewer();
-        //createPartControl(shell);
-        //frame.add();
-        Composite composite = new Composite(displaySash, SWT.EMBEDDED | SWT.NO_BACKGROUND);
-        Frame frame = SWT_AWT.new_Frame(composite);
-        JMapViewer jmv = new JMapViewer();
-        frame.add(jmv);
-        jmv.addMapMarker(new MapMarkerDot(50.07,8.4));
-        jmv.addMapMarker(new MapMarkerDot(50.57, 6.57));
-        jmv.addMapMarker(new MapMarkerDot(53.34, 10.02));
-         
-         Coordinate one = new Coordinate(50.07, 8.4);
-         Coordinate two = new Coordinate(50.57, 6.57);
-         Coordinate three = new Coordinate(53.34, 10.02);
-
-         List<Coordinate> route = new ArrayList<Coordinate>(Arrays.asList(one, two, three));
-         jmv.addMapPolygon(new MapPolygonImpl(route));
-         
-         
-         jmv.addMapMarker(new MapMarkerDot(52.23, 9.44));
-         jmv.addMapMarker(new MapMarkerDot(49.01, 8.24));
-         jmv.addMapMarker(new MapMarkerDot(48.47, 9.11));
-          
-          Coordinate one1 = new Coordinate(52.23, 9.44);
-          Coordinate two1 = new Coordinate(49.01, 8.24);
-          Coordinate three1 = new Coordinate(48.47, 9.11);
-
-          List<Coordinate> route2 = new ArrayList<Coordinate>(Arrays.asList(one1, two1, three1));
-          jmv.addMapPolygon(new MapPolygonImpl(route2));
+        //Add Map Component
+        mapComponent = new UIComponentMap( );
+        mapComponent.buildMapComponent( displaySash, menuSash, display );
+        menuBars.setMapComponent(mapComponent);
+        
+ 
         
         //Add resultsPanelcomponent
         UIComponentResultsPanel resultsPanel = new UIComponentResultsPanel( );
@@ -196,11 +157,12 @@ public class MainWindow
                 progressBarS.setSelection(0);
                 butt_stop.setEnabled(true);
                 butt_start.setEnabled(false);
+                mapComponent.getMap().removeAllMapPolygons();
                 lab_timer.setText("Total runtime : ... ");
                 stratTime = System.currentTimeMillis();
                 AppSettings appSettings= menuBars.collectSettings();
                 processThread = new ProcessingThread(menuBars.getNetwork(), appSettings);
-                processThread.setUIComponents(butt_start, butt_stop, resultText, display, progressBarO, progressBarS, stratTime, lab_timer);
+                processThread.setUIComponents(butt_start, butt_stop, resultText, display, progressBarO, progressBarS, stratTime, lab_timer, mapComponent.getMap());
                 //new Thread( processThread ).start( );  
                 //processThread.allDone = true;
                 processThread.start();         

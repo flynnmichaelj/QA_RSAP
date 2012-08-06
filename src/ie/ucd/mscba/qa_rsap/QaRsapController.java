@@ -18,14 +18,25 @@ import ie.ucd.mscba.qa_rsap.settings.VNSSettings;
 import ie.ucd.mscba.qa_rsap.valueobjects.NodeAdjacencies;
 import ie.ucd.mscba.qa_rsap.valueobjects.OCC;
 import ie.ucd.mscba.qa_rsap.valueobjects.OCCChangeHolder;
+import ie.ucd.mscba.qa_rsap.valueobjects.Ring;
 import ie.ucd.mscba.qa_rsap.valueobjects.Solution;
+import ie.ucd.mscba.qa_rsap.valueobjects.Spur;
 
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.ProgressBar;
 import org.eclipse.swt.widgets.Text;
+import org.openstreetmap.gui.jmapviewer.Coordinate;
+import org.openstreetmap.gui.jmapviewer.JMapViewer;
+import org.openstreetmap.gui.jmapviewer.MapMarkerDot;
+import org.openstreetmap.gui.jmapviewer.MapPolygonImpl;
+import org.openstreetmap.gui.jmapviewer.events.JMVCommandEvent;
 
 import de.zib.sndlib.network.Link;
 import de.zib.sndlib.network.Network;
@@ -45,15 +56,17 @@ public class QaRsapController
     Display display                 = null; 
     ProgressBar progressBarO         = null;
     ProgressBar progressBarS         = null;
+    JMapViewer map                  = null;
     
     private boolean stopRequested = false;
     
-    public void setUIComponents(Text outputArea, Display display, ProgressBar progressBarO,  ProgressBar progressBarS)
+    public void setUIComponents(Text outputArea, Display display, ProgressBar progressBarO,  ProgressBar progressBarS,  JMapViewer map)
     {
         this.outputArea = outputArea;
         this.display = display;
         this.progressBarO = progressBarO;
         this.progressBarS = progressBarS;
+        this.map = map;
     }
     
     public void runQaRsap(Network network, AppSettings appSettings)
@@ -68,7 +81,6 @@ public class QaRsapController
         //(1)    Build Network Object representation from input file
         //===========================================================
         //Build Network Object representation from input file
-       //Network network = InputFileHandler.loadInput(fileName);
         List<Link> networkLinks = network.getNetworkStructure( ).getLinks( ).getLink( );
         List<Node> networkNodes = network.getNetworkStructure( ).getNodes( ).getNode( );
         
@@ -87,7 +99,8 @@ public class QaRsapController
         
         SolutionGenerator qaRsapProcessor = new SolutionGenerator(network, nodeAdjacencies, vnsSetting);
         
-        updateResultsPanel("Genrating initial Soltutions.", false, display, outputArea);
+        updateResultsPanel("===================================================================", false, display, outputArea);
+        updateResultsPanel("Genrating initial Soltutions.", true, display, outputArea);
         
         Solution[] initialSolutions = new Solution[annealSettings.getNumSearches()];
         for(int i=0; i<annealSettings.getNumSearches(); i++ )
@@ -95,7 +108,7 @@ public class QaRsapController
             
             Solution thisInitSol  = null;
             int initSolCounter = 1;
-            while(thisInitSol == null && initSolCounter <= 10)
+            while(thisInitSol == null && initSolCounter <= 10 && !stopRequested)
             {
                 thisInitSol = qaRsapProcessor.getInitialSolution();
                 if(thisInitSol != null)
@@ -104,12 +117,18 @@ public class QaRsapController
                     boolean valid = thisInitSol.validate(nodeAdjacencies, networkNodes.size( ));
                     if(!valid)
                     {
-                        //System.out.println("ERROR: INIT SOLUTION NOT VALID");
+                        System.out.println("ERROR: INIT SOLUTION NOT VALID");
+                        updateResultsPanel("Ininial Solution invalid, Attempting retry.", true, display, outputArea);
                         thisInitSol = null;
                     }
                 }
+                else
+                    updateResultsPanel("Ininial Solution not found, Attempting retry.", true, display, outputArea);
                 initSolCounter++;
             }
+            if(stopRequested)
+                return;
+            
             if(thisInitSol != null)
             {
                 initialSolutions[i] = thisInitSol; //TODO
@@ -119,11 +138,6 @@ public class QaRsapController
             }
             else
                 i--;
-            /*System.out.println( "============= INIT SOL =============" );
-            thisInitSol.printLocalRing( );
-            thisInitSol.printSpurs( );
-            thisInitSol.printTertiaryRing( );
-            System.out.println( "============= END INIT SOL =============" );*/
         }
         
         //=====================================
@@ -195,6 +209,8 @@ public class QaRsapController
             
             double calcForProgessBar = (iSearch+1)/(double)annealSettings.getNumSearches();
             updateProgressBar((calcForProgessBar*100) , display, progressBarO);
+            
+            updateMap(perSearchBest[iSearch], map, network.getNetworkStructure().getNodes().getCoordinatesType());
         }
         
         //finished Annealing
@@ -211,6 +227,7 @@ public class QaRsapController
         //===================================
         //(4)   Output final results
         //===================================
+        updateMap(overAllBestSol, map, network.getNetworkStructure().getNodes().getCoordinatesType());
         
         if(!stopRequested)
         {
@@ -222,9 +239,6 @@ public class QaRsapController
             updateResultsPanel("Overall Cost:" + overAllBestSol.getTotalCost( ), true, display, outputArea);
             updateResultsPanel("============= Overall Best Sol  =============", true, display, outputArea);
         }
-
-        //GraphView view = new GraphView();
-        //view.drawGraph(overAllBestSol);
     }
     
     private void anneal(List<Link> networkLinks, Solution[] currrentSliceSolutions, 
@@ -263,9 +277,7 @@ public class QaRsapController
                    //Stops the proccess if requested by the user
                     if(stopRequested)
                         return;
-                    
-                    //System.out.println("Entered Trotter slice: " + k + "For nmcs: " + istep);
-                    //Solution bestSolSoFar = currrentSliceSolutions[k];                
+                              
                     Solution vnsResult = currrentSliceSolutions[k];
             
                     //Pick the neighbourhood by probability.
@@ -274,7 +286,7 @@ public class QaRsapController
                     
                     //Determine how many time we want to run this neighbourhood search on this iteration 
                     long runBytimes = 1;
-                    if(probRunBytimes > Constants.probMultipleRuns)
+                    if(probRunBytimes > Constants.PROB_MULTIPLE_RUNS)
                     {
                         //Number of times to run is based on a proportion of the number of nodes
                         runBytimes = Math.round((network.getNetworkStructure( ).getNodes( ).getNode( ).size( ))*Math.random( ));
@@ -284,48 +296,40 @@ public class QaRsapController
                         }
                     }
                     
-        
-                    Solution nsSolHolder = null;
-                    if(probPickNeighbourhood <= Constants.prob_LR_DeleteInsert)
+                    if(probPickNeighbourhood <= Constants.PORB_LR_DELETE_INSERT)
                     {
                         vnsResult = invokeVNS(currrentSliceSolutions[k],runBytimes, 1 , networkLinks, ng, nodeAdjacencies);
                     }
-                    else if((probPickNeighbourhood > Constants.prob_LR_DeleteInsert) && (probPickNeighbourhood < Constants.prob_LR_NodeSwap))
+                    else if((probPickNeighbourhood > Constants.PORB_LR_DELETE_INSERT) && (probPickNeighbourhood < Constants.PROB_LR_NODE_SWAP))
                     {
                         if(currrentSliceSolutions[k].getLocalrings( ).size( ) > 1)
                         {
                             vnsResult = invokeVNS(currrentSliceSolutions[k],runBytimes, 2 , networkLinks, ng, nodeAdjacencies);
                         }
                     }
-                    else if((probPickNeighbourhood > Constants.prob_LR_NodeSwap) && (probPickNeighbourhood < Constants.prob_LR_DeleteSmallRing))
+                    else if((probPickNeighbourhood > Constants.PROB_LR_NODE_SWAP) && (probPickNeighbourhood < Constants.PROB_LR_DELETE_SMALL_RING))
                     {
                         vnsResult = invokeVNS(currrentSliceSolutions[k],runBytimes, 3 , networkLinks, ng, nodeAdjacencies); 
                     }
-                    else if((probPickNeighbourhood > Constants.prob_LR_DeleteSmallRing) && (probPickNeighbourhood < Constants.prob_LR_Split))
+                    else if((probPickNeighbourhood > Constants.PROB_LR_DELETE_SMALL_RING) && (probPickNeighbourhood < Constants.PROB_LR_SPLIT))
                     {
                         vnsResult = invokeVNS(currrentSliceSolutions[k],runBytimes, 4 , networkLinks, ng, nodeAdjacencies);  
                     }
-                    else if((probPickNeighbourhood > Constants.prob_LR_Split) && (probPickNeighbourhood < Constants.prob_LR_InsertEdge))
+                    else if((probPickNeighbourhood > Constants.PROB_LR_SPLIT) && (probPickNeighbourhood < Constants.PROB_LR_INSERT_EDGE))
                     {
                         if(currrentSliceSolutions[k].getSpurs( ) != null && currrentSliceSolutions[k].getSpurs( ).size( ) > 1)
                         {
                             vnsResult = invokeVNS(currrentSliceSolutions[k], runBytimes, 5 , networkLinks, ng, nodeAdjacencies);
                         }          
                     }
-                    else if((probPickNeighbourhood > Constants.prob_LR_InsertEdge) && (probPickNeighbourhood < Constants.prob_TR_perturbe))
+                    else if((probPickNeighbourhood > Constants.PROB_LR_INSERT_EDGE) && (probPickNeighbourhood < Constants.PROB_TR_PERTURBE))
                     {
                         if(currrentSliceSolutions[k].getTertiaryRing( ) != null)
                         {
                             vnsResult = invokeVNS(currrentSliceSolutions[k],runBytimes, 6 , networkLinks, ng, nodeAdjacencies);
                         }          
                     }
-                    
-                    /**System.out.println( "============= VNS SOL =============" );
-                    bestSolSoFar.printLocalRing( );
-                    bestSolSoFar.printSpurs( );
-                    bestSolSoFar.printTertiaryRing( );
-                    System.out.println( "============= END VNS SOL =============" );*/
-                    
+                                        
                     VnsDistDiff = vnsResult.getTotalCost() - currrentSliceSolutions[k].getTotalCost( );
                     double scaledDiff = VnsDistDiff*nodeAdjacencies.getScaleRatio( );
                     
@@ -382,7 +386,6 @@ public class QaRsapController
     
     private Solution invokeVNS(Solution inputSol, long runTimes, int neighbourhoodSearch, List<Link> networkLinks, NeighbourGenerator ng, NodeAdjacencies adjList)
     {
-        //System.out.println( "VNS:" + neighbourhoodSearch + ". Run times:" + runTimes);
         Solution nsHolder = null;
         Solution bestVNSSol = null;
         double bestVNSCost = Double.POSITIVE_INFINITY;
@@ -452,6 +455,68 @@ public class QaRsapController
            }
         });
     }
+    
+    private void updateMap(Solution bestSol, final JMapViewer map, String coordType)
+    {
+        map.removeAllMapPolygons();
+        
+        if(!"pixel".equalsIgnoreCase(coordType))
+        {
+            List<Ring> rings = bestSol.getLocalrings( );
+            List<Spur> spurs = bestSol.getSpurs();
+            Ring tertiaryRing = bestSol.getTertiaryRing();
+            
+           
+            //Handle Local rings
+            for(int i=0; i<rings.size( ); i++)
+            {
+                List<Coordinate> localRingRoute = new ArrayList<Coordinate>();
+                Ring currentRing = rings.get(i);
+                List<Node> nodes = currentRing.getNodes();
+                for(int j=0; j<nodes.size( ); j++)
+                {   
+                    Node currentNode = nodes.get( j );
+                    double yCoord = currentNode.getCoordinates().getY().doubleValue();
+                    double xCoord = currentNode.getCoordinates().getX().doubleValue();
+                    localRingRoute.add(new Coordinate(yCoord, xCoord));                          
+                }
+                map.addMapPolygon(new MapPolygonImpl(localRingRoute, Color.BLACK, new BasicStroke(3.0f)));
+            }
+            
+            //Handle spurs
+            for(int i=0; i<spurs.size( ); i++)
+            {
+                Spur currentSpur = spurs.get(i);
+                Node parentNode = currentSpur.getParentNode();
+                Node spurNode = currentSpur.getSpurNode();
+                double parYCoord = parentNode.getCoordinates().getY().doubleValue();
+                double parXCoord = parentNode.getCoordinates().getX().doubleValue();
+                double spurYCoord = spurNode.getCoordinates().getY().doubleValue();
+                double spurXCoord = spurNode.getCoordinates().getX().doubleValue();
+                Coordinate parentNc = new Coordinate(parYCoord, parXCoord);
+                Coordinate sourNc = new Coordinate(spurYCoord, spurXCoord);
+                
+                List<Coordinate> spurRoute = new ArrayList<Coordinate>(Arrays.asList(parentNc, sourNc, sourNc));
+                map.addMapPolygon(new MapPolygonImpl(spurRoute, Color.BLACK, new BasicStroke(3.0f)));
+            }
+            
+            //Handle tertiary Ring
+            if(tertiaryRing!=null && tertiaryRing.getNodes().size() > 0)
+            {
+                List<Coordinate> tertiaryRingRoute = new ArrayList<Coordinate>();
+                List<Node> nodes = tertiaryRing.getNodes();
+                for(int j=0; j<nodes.size( ); j++)
+                {   
+                    Node currentNode = nodes.get( j );
+                    double yCoord = currentNode.getCoordinates().getY().doubleValue();
+                    double xCoord = currentNode.getCoordinates().getX().doubleValue();
+                    tertiaryRingRoute.add(new Coordinate(yCoord, xCoord));                          
+                }
+                map.addMapPolygon(new MapPolygonImpl(tertiaryRingRoute, Color.RED, new BasicStroke(1.5f)));
+            }
+        }
+    }
+    
     public void stop(boolean stop)
     {
         stopRequested = true;

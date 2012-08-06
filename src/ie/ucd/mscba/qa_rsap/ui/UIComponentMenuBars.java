@@ -15,9 +15,11 @@ import ie.ucd.mscba.qa_rsap.settings.AnnealSettings;
 import ie.ucd.mscba.qa_rsap.settings.AppSettings;
 import ie.ucd.mscba.qa_rsap.settings.VNSSettings;
 
+import java.awt.Color;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.util.List;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CLabel;
@@ -37,9 +39,13 @@ import org.eclipse.swt.widgets.FileDialog;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Spinner;
+import org.openstreetmap.gui.jmapviewer.JMapViewer;
+import org.openstreetmap.gui.jmapviewer.MapMarkerDot;
 
 import de.zib.sndlib.network.AdditionalModules;
 import de.zib.sndlib.network.Network;
+import de.zib.sndlib.network.Node;
+import de.zib.sndlib.network.Nodes;
 
 /**
  * 
@@ -67,7 +73,7 @@ public class UIComponentMenuBars
     private Image img_network               = null;
     private Image img_anneal                = null;
     
-    //Error location
+    //Validate Handling labels
     private Label lab_initMaxLRS_Valid      = null;
     private Label lab_maxLRS_Valid          = null;
     private Label lab_capMod_Valid          = null;
@@ -85,6 +91,7 @@ public class UIComponentMenuBars
     //Hold values of settings as they change
     private String fileName = null;
     private Network network = null;
+    private UIComponentMap mapComponent = null;
     
     
     /*private int initMaxLRSize = 0;
@@ -117,8 +124,7 @@ public class UIComponentMenuBars
         this.network = network;
     }
 
-    public ExpandBar buildMenu(Composite sashForm, final Display display, 
-                                final Shell shell, Network network, final Button butt_start )
+    public ExpandBar buildMenu(Composite sashForm, final Display display, final Shell shell, final Button butt_start)
     {
         ExpandBar bar = new ExpandBar (sashForm, SWT.V_SCROLL); 
         //================================================
@@ -199,6 +205,12 @@ public class UIComponentMenuBars
                         setFileName( "Selected file \"" + path.substring(path.lastIndexOf("\\")+1) + "\" is valid");
                         lab_fileValue.setImage(img_tick);
                         enableUIComponents(butt_start); 
+                        if(!"pixel".equalsIgnoreCase(network.getNetworkStructure().getNodes().getCoordinatesType()))
+                            mapComponent.setMapLabel("Use right mouse button to move,\n " + "left double click or mouse wheel to zoom.", Color.BLACK);                           
+                        else  
+                            mapComponent.setMapLabel("Pixel coodinate types are not supported on map view.", Color.RED);
+                        
+                        mapComponent.loadNodesOnMap(network.getNetworkStructure().getNodes());
                     }
                     else
                     {
@@ -667,5 +679,21 @@ public class UIComponentMenuBars
             this.lab_fileValue.setText(fileName.substring(fileName.lastIndexOf("\\")+1));
         else
             this.lab_fileValue.setText("No input file selected");
+    }
+
+    /**
+     * @return the map
+     */
+    public UIComponentMap getMapComponent()
+    {
+        return mapComponent;
+    }
+
+    /**
+     * @param map the map to set
+     */
+    public void setMapComponent(UIComponentMap mapComponent)
+    {
+        this.mapComponent = mapComponent;
     }
 }

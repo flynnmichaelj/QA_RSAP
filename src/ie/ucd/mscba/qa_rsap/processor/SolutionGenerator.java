@@ -45,6 +45,12 @@ public class SolutionGenerator
     private Dijkstra        dijkstra        = null;
     private VNSSettings     vnsSettings     = null;
 
+    /**
+     * SolutionGenerator Object which accepts the three elements required to generate initial solutions.
+     * These are: 1) The Network Representation
+     *            2) The adjacency matrix
+     *            3) User define setting for the problem
+     */
     public SolutionGenerator( Network network, NodeAdjacencies nodeAdjacencies, VNSSettings vnsSettings )
     {
         super( );
@@ -56,6 +62,12 @@ public class SolutionGenerator
         this.vnsSettings = vnsSettings;
     }
 
+    /**
+     * This method is responsible for generating an initial solution. This process takes 3 stages, 
+     *  1) Generating local ring the do not violate the size constraint.
+     *  2) Any node that could not be added as ring are added as spurs.
+     *  3) Generating a tertiary ring that connects all local ring. 
+     */
     public Solution getInitialSolution()
     {
         Solution sol = new Solution(vnsSettings);
@@ -121,18 +133,205 @@ public class SolutionGenerator
                 return null; // No valid initial sol found;
             }
         }
-
-        // /---------------------------------------------------------
-        // /Calculate Total cost.
-        // /----------------------------------------------------------
         sol.calculateTotalCost( network.getNetworkStructure( ).getLinks( ).getLink( ) );
         //System.out.println( "Total solution Cost : " + sol.getTotalCost( ) );
         return sol;
     }
 
-    // =======================================
-    // GenerateTertiaryRing
-    // ======================================
+    /**
+     * This method is responsible for creating spur objects. Nodes that cannot be added to a ring are spur objcet.
+     * This method ensure that a spur is created off it closest node which is already on a ring.
+     */
+    public Spur createSrup(Node currentNode, List<Node> allNodes, List<Ring> localRings)
+    {
+        String currentNodeName = currentNode.getId( );
+
+        Spur spur = new Spur( );
+        spur.setSpurNode( currentNode );
+
+        // Find closest local ring that spur can be attached to
+        List<AdjNode> adjList = nodeAdjacencies.getAdjList( currentNodeName );
+        for ( int i = 0; i < adjList.size( ); i++ )
+        {
+            boolean parentfound = false;
+            AdjNode currentAdjNode = adjList.get( i );
+            Node currentAdjNodeObj = QaRsapUtils.getNodeById( currentAdjNode.getNodeName( ), allNodes );
+            for ( int j = 0; j < localRings.size( ); j++ )
+            {
+                Ring currentLocalRing = localRings.get( j );
+                if ( currentLocalRing.getNodes( ).contains( currentAdjNodeObj ) )
+                {
+                    spur.setParentNode( currentAdjNodeObj );
+                    parentfound = true;
+                    break;
+                }
+            }
+            if ( parentfound )
+                break;
+        }
+
+        if ( spur.getParentNode( ) == null )
+            return null;
+
+        return spur;
+    }
+
+    /**
+     * Given a seed node, this method is responsible for creating a local ring around this node. It is greedy by nature
+     * in that it continues to add the closest node to the previous node as long as more adjacent nodes exist and the size 
+     * constraints are node breached. When on to these stopping conditions are met, an attempt is made to complete the ring. 
+     * Dijkstra with backtracking is used to ensure every possibility of successfully completing the ring.
+     */
+    public Ring createLocalRing(Node currentNode, List<Node> allNodes, List<Node> tempNodeList, 
+                                List<Node> spurCandidates, List<Ring> localRings)
+    {
+        Ring currentRing = new Ring( );
+        String currentNodeName = currentNode.getId( );
+
+        // Add the first node to the ring
+        currentRing.addNode( currentNode );
+        tempNodeList.remove( currentNode );
+
+        // While the ring Size is within ring size limit
+        boolean noMoreNodes = false;
+        while ( currentRing.getSize( ) < vnsSettings.getInitMaxLRSize() && !noMoreNodes )
+        {
+            List<AdjNode> adjList = nodeAdjacencies.getAdjList( currentNodeName ); // Get adjacent node for the current
+                                                                                   // node
+            String nearestAdjNode = findLowestAdjCost( adjList, tempNodeList ); // Find lowest cost adjacent node that
+                                                                                // is still available
+
+            if ( nearestAdjNode != null )
+            {
+                currentNode = QaRsapUtils.getNodeById( nearestAdjNode, allNodes ); // Get Nearest Node object
+                currentNodeName = currentNode.getId( );
+                currentRing.addNode( currentNode );
+                tempNodeList.remove( currentNode );
+            }
+            else
+            {
+                noMoreNodes = true;
+            }
+        }
+        boolean ringComplete = completeRing( currentRing, allNodes, tempNodeList, spurCandidates, localRings);
+        if ( ringComplete == true )
+        {
+            // do nothing
+        }
+        else
+        {
+            currentRing = null;
+        }
+        return currentRing;
+    }
+
+    /**
+     * This method returns the closet node to selected node node that has not already been used
+     * as part of the solution.
+     */
+    public String findLowestAdjCost(List<AdjNode> adjList, List<Node> tempNodeList)
+    {
+        String node = null;
+
+        for ( int i = 0; i < adjList.size( ); i++ )
+        {
+            AdjNode adjNode = adjList.get( i );
+            if ( QaRsapUtils.getNodeById( adjNode.getNodeName( ), tempNodeList ) != null )
+            {
+                node = adjNode.getNodeName( );
+                break;
+            }
+        }
+        return node;
+    }
+
+    /**
+     * This method is responsible from completing a local ring when stopping constrains have been met.
+     */
+    public boolean completeRing(Ring currentRing, List<Node> allNodes, List<Node> tempNodeList, List<Node> spurCandidates,
+                    List<Ring> rings)
+    {
+        boolean ringComplete = false;
+        List<Node> allNetworkNodes = network.getNetworkStructure( ).getNodes( ).getNode( );
+        String lastNodeName = null;
+        Node lastNode = null;
+
+        int ringSize = currentRing.getSize( );
+        while ( ringSize > 2 )
+        {
+            lastNodeName = currentRing.getSpecificNodeName( ringSize - 1 );
+            List<AdjNode> adjList = nodeAdjacencies.getAdjList( lastNodeName );
+            lastNode = QaRsapUtils.getNodeById( lastNodeName, allNodes );
+
+            if ( QaRsapUtils.isAdj( currentRing.getSpecificNodeName( 0 ), adjList ) )
+            {
+                currentRing.addNode( currentRing.getSpecificNode( 0 ) );
+                ringComplete = true;
+                break;
+            }
+            else if ( ringSize < vnsSettings.getInitMaxLRSize()-1 )
+            {
+                List<String> nodesToRemove = QaRsapUtils.nodesToRemove( currentRing, null, rings, new String[] {
+                        lastNodeName, currentRing.getSpecificNodeName( 0 ) } );
+                List<DijkstraNode> returnedNodes = dijkstra.runDijkstra( lastNode, currentRing.getSpecificNode( 0 ),
+                                                                            nodesToRemove);
+
+                if ( returnedNodes != null
+                                && returnedNodes.get( 0 ).getPathFromRoot( ).size( ) < (vnsSettings.getMaxLocalRingSize() - ringSize) )
+                {
+                    DijkstraNode returnedNode = returnedNodes.get( 0 );
+                    List<String> pathList = returnedNode.getPathFromRoot( );
+
+                    for ( int j = 0; j < pathList.size( ) - 1; j++ )
+                    {
+                        Node thisNode = QaRsapUtils.getNodeById( pathList.get( j ), allNetworkNodes );
+                        currentRing.addNode( thisNode );
+                        tempNodeList.remove( thisNode );
+                        if(spurCandidates.contains( thisNode ))
+                        {
+                            spurCandidates.remove( thisNode );
+                        }
+                    }
+                    currentRing.addNode( currentRing.getSpecificNode( 0 ) );
+                    ringComplete = true;
+                    break;
+                }
+                else
+                {
+                    currentRing.removeNode( lastNode );
+                    tempNodeList.add( lastNode );
+                    ringSize = currentRing.getSize( );
+                    continue;
+                }
+            }
+            else
+            {
+                currentRing.removeNode( lastNode );
+                tempNodeList.add( lastNode );
+                ringSize = currentRing.getSize( );
+            }
+        }
+        if ( !ringComplete ) // Ring cannot be complete, disassamble ring.
+        {
+            while ( ringSize > 0 )
+            {
+                lastNodeName = currentRing.getSpecificNodeName( ringSize - 1 );
+                lastNode = QaRsapUtils.getNodeById( lastNodeName, allNodes );
+                currentRing.removeNode( lastNode );
+                tempNodeList.add( lastNode );
+                ringSize = currentRing.getSize( );
+            }
+            currentRing = null;
+        }
+        return ringComplete;
+    }
+    /**
+     * The generateTertiaryRing method is responsible for joining all local ring together. Firstly it pick a local ring 
+     * at random and then finds its closest neighbouring ring. Once these two rings are connected, the process is repeated,
+     * using Dijkstra to one ring to the next. When all local rings have been visited, Dijkstra is used again to connect the 
+     * start and end nodes to complete the ring.
+     * 
+     */
     public Ring generateTertiaryRing(List<Spur> spurs, List<Ring> localRings)
     {
         List<Node> allNetworkNodes = network.getNetworkStructure( ).getNodes( ).getNode( );
@@ -329,7 +528,10 @@ public class SolutionGenerator
         }
         return tertiaryRing;
     }
-
+    
+    /**
+     * This method uses Dijkstra to find the best connection point (local ring) to selected node.
+     */
     private DijkstraNode getBestconnectors(Node node, List<String> nodesToRemove, Ring currentRing)
     {
        List<Node> allNetworkNodes = network.getNetworkStructure( ).getNodes( ).getNode( );
@@ -365,235 +567,4 @@ public class SolutionGenerator
 
         return bestRightChoice;
     }
-
-    public Ring findApplicableParent(Ring tertiaryRing, List<Ring> searchableRings, Node childNode)
-    {
-        Ring returnRing = null;
-
-        for ( Ring ring : searchableRings )
-        {
-            if ( ring.getNodes( ).contains( childNode ) && !tertiaryRing.getNodes( ).contains( childNode ) )
-            {
-                tertiaryRing.addNode( childNode );
-                returnRing = ring;
-                break;
-            }
-        }
-        return returnRing;
-    }
-
-    // =======================================
-    //
-    // ======================================
-    public Spur createSrup(Node currentNode, List<Node> allNodes, List<Ring> localRings)
-    {
-        String currentNodeName = currentNode.getId( );
-
-        Spur spur = new Spur( );
-        spur.setSpurNode( currentNode );
-
-        // Find closest local ring that spur can be attached to
-        List<AdjNode> adjList = nodeAdjacencies.getAdjList( currentNodeName );
-        for ( int i = 0; i < adjList.size( ); i++ )
-        {
-            boolean parentfound = false;
-            AdjNode currentAdjNode = adjList.get( i );
-            Node currentAdjNodeObj = QaRsapUtils.getNodeById( currentAdjNode.getNodeName( ), allNodes );
-            for ( int j = 0; j < localRings.size( ); j++ )
-            {
-                Ring currentLocalRing = localRings.get( j );
-                if ( currentLocalRing.getNodes( ).contains( currentAdjNodeObj ) )
-                {
-                    spur.setParentNode( currentAdjNodeObj );
-                    parentfound = true;
-                    break;
-                }
-            }
-            if ( parentfound )
-                break;
-        }
-
-        if ( spur.getParentNode( ) == null )
-            return null;
-
-        return spur;
-    }
-
-    public Ring createLocalRing(Node currentNode, List<Node> allNodes, List<Node> tempNodeList, 
-                                List<Node> spurCandidates, List<Ring> localRings)
-    {
-        Ring currentRing = new Ring( );
-        String currentNodeName = currentNode.getId( );
-
-        // Add the first node to the ring
-        currentRing.addNode( currentNode );
-        tempNodeList.remove( currentNode );
-
-        // While the ring Size is within ring size limit
-        boolean noMoreNodes = false;
-        while ( currentRing.getSize( ) < vnsSettings.getInitMaxLRSize() && !noMoreNodes )
-        {
-            List<AdjNode> adjList = nodeAdjacencies.getAdjList( currentNodeName ); // Get adjacent node for the current
-                                                                                   // node
-            String nearestAdjNode = findLowestAdjCost( adjList, tempNodeList ); // Find lowest cost adjacent node that
-                                                                                // is still available
-
-            if ( nearestAdjNode != null )
-            {
-                currentNode = QaRsapUtils.getNodeById( nearestAdjNode, allNodes ); // Get Nearest Node object
-                currentNodeName = currentNode.getId( );
-                currentRing.addNode( currentNode );
-                tempNodeList.remove( currentNode );
-            }
-            else
-            {
-                noMoreNodes = true;
-            }
-        }
-        boolean ringComplete = completeRing( currentRing, allNodes, tempNodeList, spurCandidates, localRings);
-        if ( ringComplete == true )
-        {
-            // do nothing
-        }
-        else
-        {
-            currentRing = null;
-        }
-        return currentRing;
-    }
-
-    public String findLowestAdjCost(List<AdjNode> adjList, List<Node> tempNodeList)
-    {
-        String node = null;
-
-        for ( int i = 0; i < adjList.size( ); i++ )
-        {
-            AdjNode adjNode = adjList.get( i );
-            if ( QaRsapUtils.getNodeById( adjNode.getNodeName( ), tempNodeList ) != null )
-            {
-                node = adjNode.getNodeName( );
-                break;
-            }
-        }
-        return node;
-    }
-
-    public boolean completeRing(Ring currentRing, List<Node> allNodes, List<Node> tempNodeList, List<Node> spurCandidates,
-                    List<Ring> rings)
-    {
-        boolean ringComplete = false;
-        List<Node> allNetworkNodes = network.getNetworkStructure( ).getNodes( ).getNode( );
-        String lastNodeName = null;
-        Node lastNode = null;
-
-        int ringSize = currentRing.getSize( );
-        while ( ringSize > 2 )
-        {
-            lastNodeName = currentRing.getSpecificNodeName( ringSize - 1 );
-            List<AdjNode> adjList = nodeAdjacencies.getAdjList( lastNodeName );
-            lastNode = QaRsapUtils.getNodeById( lastNodeName, allNodes );
-
-            if ( QaRsapUtils.isAdj( currentRing.getSpecificNodeName( 0 ), adjList ) )
-            {
-                currentRing.addNode( currentRing.getSpecificNode( 0 ) );
-                ringComplete = true;
-                break;
-            }
-            else if ( ringSize < vnsSettings.getInitMaxLRSize()-1 )
-            {
-                List<String> nodesToRemove = QaRsapUtils.nodesToRemove( currentRing, null, rings, new String[] {
-                        lastNodeName, currentRing.getSpecificNodeName( 0 ) } );
-                List<DijkstraNode> returnedNodes = dijkstra.runDijkstra( lastNode, currentRing.getSpecificNode( 0 ),
-                                                                            nodesToRemove);
-
-                if ( returnedNodes != null
-                                && returnedNodes.get( 0 ).getPathFromRoot( ).size( ) < (vnsSettings.getMaxLocalRingSize() - ringSize) )
-                {
-                    DijkstraNode returnedNode = returnedNodes.get( 0 );
-                    List<String> pathList = returnedNode.getPathFromRoot( );
-
-                    for ( int j = 0; j < pathList.size( ) - 1; j++ )
-                    {
-                        Node thisNode = QaRsapUtils.getNodeById( pathList.get( j ), allNetworkNodes );
-                        currentRing.addNode( thisNode );
-                        tempNodeList.remove( thisNode );
-                        if(spurCandidates.contains( thisNode ))
-                        {
-                            spurCandidates.remove( thisNode );
-                        }
-                    }
-                    currentRing.addNode( currentRing.getSpecificNode( 0 ) );
-                    ringComplete = true;
-                    break;
-                }
-                else
-                {
-                    currentRing.removeNode( lastNode );
-                    tempNodeList.add( lastNode );
-                    ringSize = currentRing.getSize( );
-                    continue;
-                }
-            }
-            else
-            {
-                currentRing.removeNode( lastNode );
-                tempNodeList.add( lastNode );
-                ringSize = currentRing.getSize( );
-            }
-        }
-        if ( !ringComplete ) // Ring cannot be complete, disassamble ring.
-        {
-            while ( ringSize > 0 )
-            {
-                lastNodeName = currentRing.getSpecificNodeName( ringSize - 1 );
-                lastNode = QaRsapUtils.getNodeById( lastNodeName, allNodes );
-                currentRing.removeNode( lastNode );
-                tempNodeList.add( lastNode );
-                ringSize = currentRing.getSize( );
-            }
-            currentRing = null;
-        }
-        return ringComplete;
-    }
-
-    // public boolean completeRing(Ring currentRing, List<Node> allNodes, List<Node> tempNodeList)
-    // {
-    // boolean ringComplete = false;
-    //
-    // String lastNodeName = null;
-    // Node lastNode = null;
-    //
-    // int ringSize = currentRing.getSize();
-    // while( ringSize > 2)
-    // {
-    // lastNodeName = currentRing.getSpecificNodeName(ringSize-1);
-    // List<AdjNode> adjList = nodeAdjacencies.getAdjList(lastNodeName);
-    // lastNode = QaRsapUtils.getNodeById(lastNodeName, allNodes);
-    // if(QaRsapUtils.isAdj(currentRing.getSpecificNodeName(0), adjList))
-    // {
-    // currentRing.addNode(currentRing.getSpecificNode(0));
-    // ringComplete = true;
-    // break;
-    // }
-    // else
-    // {
-    // currentRing.removeNode(lastNode);
-    // tempNodeList.add(lastNode);
-    // }
-    // ringSize = currentRing.getSize();
-    // }
-    // if(!ringComplete) //Ring cannot be complete, disassamble ring.
-    // {
-    // while( ringSize > 0)
-    // {
-    // lastNodeName = currentRing.getSpecificNodeName(ringSize-1);
-    // lastNode = QaRsapUtils.getNodeById(lastNodeName, allNodes);
-    // currentRing.removeNode(lastNode);
-    // tempNodeList.add(lastNode);
-    // ringSize = currentRing.getSize();
-    // }
-    // currentRing = null;
-    // }
-    // return ringComplete;
-    // }
 }
