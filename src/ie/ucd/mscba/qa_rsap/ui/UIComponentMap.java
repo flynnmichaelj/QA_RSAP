@@ -67,7 +67,7 @@ public class UIComponentMap
         helpPanel.setLayout(new BorderLayout());
         frame.add(helpPanel, BorderLayout.SOUTH);
 
-        JButton butt_SetDisplay = new JButton("Fit Markes");
+        JButton butt_SetDisplay = new JButton("Fit Markers");
         butt_SetDisplay.addActionListener(new ActionListener()
         {
 

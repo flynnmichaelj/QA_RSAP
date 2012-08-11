@@ -146,7 +146,7 @@ public class QaRsapController
        
         //Annealing properteis
         int n_ann_q = (int)(annealSettings.getInitQAfluct()/annealSettings.getQaFluctSteps());
-        int n_ann_c = (int)(annealSettings.getInitSATemp()/annealSettings.getSaDeltaTemp());
+        int n_ann_c = (int)((annealSettings.getInitSATemp()-annealSettings.getFinalSATemp())/annealSettings.getSaDeltaTemp());
         int n_ann = 0;
         double temp = 0.0;
         double gam = 0.0;
@@ -193,7 +193,7 @@ public class QaRsapController
                 }
                 else
                 {
-                   temp = annealSettings.getInitSATemp()*(double)(iann/(double)n_ann);  //! classical annealing (temp->0);
+                   temp = (annealSettings.getInitSATemp()-annealSettings.getFinalSATemp())*(double)(iann/(double)n_ann);  //! classical annealing (temp->0);
                 }
                 anneal(networkLinks, solutionsForAnnealing, nodeAdjacencies,  network, temp, gam, annealSettings.getMcsSteps(), iSearch) ; 
                 
