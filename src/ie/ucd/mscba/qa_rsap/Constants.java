@@ -26,4 +26,6 @@ public class Constants
     public static double PROB_TR_PERTURBE = 0.5;
     public static double PROB_MULTIPLE_RUNS = 0.5;
     
+    public static int INTERNAL_SPUR_PEN = 10;
+    
 }

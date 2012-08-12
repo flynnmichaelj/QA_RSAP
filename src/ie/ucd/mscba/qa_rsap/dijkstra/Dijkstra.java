@@ -59,7 +59,6 @@ public class Dijkstra
             DijkstraNode dn = new DijkstraNode();
             dn.setNodeName(thisNode.getId( ));
             dn.setAdjList( nodeadj.getAdjList( thisNode.getId( )));
-            dn.setVisited( false );
             if((thisNode.getId( )).equals(root.getId()))
             {
                 dn.setDistanceToRoot(0);
@@ -77,7 +76,6 @@ public class Dijkstra
             if(dn != null)
             {
                 responseList.add(dn);
-                dn.setVisited( true );
                 List<AdjNode> adjList = dn.getAdjList( );
                 for (int j=0; j<adjList.size( ); j++)
                 {

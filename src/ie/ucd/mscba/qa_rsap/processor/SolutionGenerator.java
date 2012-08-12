@@ -16,7 +16,6 @@ import ie.ucd.mscba.qa_rsap.dijkstra.DijkstraNode;
 import ie.ucd.mscba.qa_rsap.settings.VNSSettings;
 import ie.ucd.mscba.qa_rsap.utils.QaRsapUtils;
 import ie.ucd.mscba.qa_rsap.valueobjects.AdjNode;
-import ie.ucd.mscba.qa_rsap.valueobjects.BestConnectors;
 import ie.ucd.mscba.qa_rsap.valueobjects.NodeAdjacencies;
 import ie.ucd.mscba.qa_rsap.valueobjects.Ring;
 import ie.ucd.mscba.qa_rsap.valueobjects.Solution;
@@ -26,12 +25,10 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
-import java.util.TreeMap;
 
 import de.zib.sndlib.network.Link;
 import de.zib.sndlib.network.Network;
 import de.zib.sndlib.network.Node;
-import de.zib.sndlib.network.Nodes;
 
 /**
  * 
@@ -44,6 +41,9 @@ public class SolutionGenerator
     List<Node>              networkNodes    = null;
     private Dijkstra        dijkstra        = null;
     private VNSSettings     vnsSettings     = null;
+    
+    //Random generator
+    private static Random rand = new Random();
 
     /**
      * SolutionGenerator Object which accepts the three elements required to generate initial solutions.
@@ -76,13 +76,12 @@ public class SolutionGenerator
 
         List<Node> tempNodeList = new ArrayList<Node>( allNetworkNodes);
         int counter = tempNodeList.size( );
-        Random randomGenerator = new Random( );
 
         // build rings and spurs
         List<Node> spursCandidates = new ArrayList<Node>( );
         while ( counter != 0 )
         {
-            int randomInt = randomGenerator.nextInt( counter ); // Get a random node of remaining to start new ring
+            int randomInt = rand.nextInt( counter ); // Get a random node of remaining to start new ring
             Node currentNode = tempNodeList.get( randomInt );
 
             Ring localRing = createLocalRing(currentNode, allNetworkNodes, 
@@ -133,7 +132,7 @@ public class SolutionGenerator
                 return null; // No valid initial sol found;
             }
         }
-        sol.calculateTotalCost( network.getNetworkStructure( ).getLinks( ).getLink( ) );
+        sol.calculateTotalCost( network.getNetworkStructure( ).getLinks( ).getLink( ), Constants.INTERNAL_SPUR_PEN);
         //System.out.println( "Total solution Cost : " + sol.getTotalCost( ) );
         return sol;
     }
@@ -192,13 +191,14 @@ public class SolutionGenerator
         currentRing.addNode( currentNode );
         tempNodeList.remove( currentNode );
 
+        List<Node> spurItemsList = new ArrayList<Node>(); //This lit keeps track of node that were once designated as spurs. We may need to add them back to spur candidates
         // While the ring Size is within ring size limit
         boolean noMoreNodes = false;
         while ( currentRing.getSize( ) < vnsSettings.getInitMaxLRSize() && !noMoreNodes )
         {
             List<AdjNode> adjList = nodeAdjacencies.getAdjList( currentNodeName ); // Get adjacent node for the current
                                                                                    // node
-            String nearestAdjNode = findLowestAdjCost( adjList, tempNodeList ); // Find lowest cost adjacent node that
+            String nearestAdjNode = findLowestAdjCost( adjList, tempNodeList, spurCandidates); // Find lowest cost adjacent node that
                                                                                 // is still available
 
             if ( nearestAdjNode != null )
@@ -206,14 +206,22 @@ public class SolutionGenerator
                 currentNode = QaRsapUtils.getNodeById( nearestAdjNode, allNodes ); // Get Nearest Node object
                 currentNodeName = currentNode.getId( );
                 currentRing.addNode( currentNode );
-                tempNodeList.remove( currentNode );
+                if(tempNodeList.contains( currentNode ))
+                {
+                    tempNodeList.remove( currentNode );
+                }
+                else if(spurCandidates.contains( currentNode ))
+                {
+                    spurCandidates.remove( currentNode );
+                    spurItemsList.add(currentNode);
+                }
             }
             else
             {
                 noMoreNodes = true;
             }
         }
-        boolean ringComplete = completeRing( currentRing, allNodes, tempNodeList, spurCandidates, localRings);
+        boolean ringComplete = completeRing( currentRing, allNodes, tempNodeList, spurCandidates, localRings, spurItemsList);
         if ( ringComplete == true )
         {
             // do nothing
@@ -226,10 +234,10 @@ public class SolutionGenerator
     }
 
     /**
-     * This method returns the closet node to selected node node that has not already been used
+     * This method returns the closet node to selected node that has not already been used
      * as part of the solution.
      */
-    public String findLowestAdjCost(List<AdjNode> adjList, List<Node> tempNodeList)
+    public String findLowestAdjCost(List<AdjNode> adjList, List<Node> tempNodeList, List<Node> spurCandidates)
     {
         String node = null;
 
@@ -241,6 +249,11 @@ public class SolutionGenerator
                 node = adjNode.getNodeName( );
                 break;
             }
+            else if (QaRsapUtils.getNodeById( adjNode.getNodeName( ), spurCandidates ) != null )
+            {
+                node = adjNode.getNodeName( );
+                break;
+            }
         }
         return node;
     }
@@ -248,11 +261,12 @@ public class SolutionGenerator
     /**
      * This method is responsible from completing a local ring when stopping constrains have been met.
      */
-    public boolean completeRing(Ring currentRing, List<Node> allNodes, List<Node> tempNodeList, List<Node> spurCandidates,
-                    List<Ring> rings)
+    public boolean completeRing(Ring currentRing, List<Node> allNetworkNodes, List<Node> tempNodeList, List<Node> spurCandidates,
+                    List<Ring> rings, List<Node> itemsFromSpurCandidate)
     {
+        //List<Node> allNetworkNodes = network.getNetworkStructure( ).getNodes( ).getNode( );
+        
         boolean ringComplete = false;
-        List<Node> allNetworkNodes = network.getNetworkStructure( ).getNodes( ).getNode( );
         String lastNodeName = null;
         Node lastNode = null;
 
@@ -261,7 +275,7 @@ public class SolutionGenerator
         {
             lastNodeName = currentRing.getSpecificNodeName( ringSize - 1 );
             List<AdjNode> adjList = nodeAdjacencies.getAdjList( lastNodeName );
-            lastNode = QaRsapUtils.getNodeById( lastNodeName, allNodes );
+            lastNode = QaRsapUtils.getNodeById( lastNodeName, allNetworkNodes );
 
             if ( QaRsapUtils.isAdj( currentRing.getSpecificNodeName( 0 ), adjList ) )
             {
@@ -286,8 +300,11 @@ public class SolutionGenerator
                     {
                         Node thisNode = QaRsapUtils.getNodeById( pathList.get( j ), allNetworkNodes );
                         currentRing.addNode( thisNode );
-                        tempNodeList.remove( thisNode );
-                        if(spurCandidates.contains( thisNode ))
+                        if(tempNodeList.contains( thisNode ))
+                        {
+                            tempNodeList.remove( thisNode );
+                        }
+                        else if(spurCandidates.contains( thisNode ))
                         {
                             spurCandidates.remove( thisNode );
                         }
@@ -299,7 +316,14 @@ public class SolutionGenerator
                 else
                 {
                     currentRing.removeNode( lastNode );
-                    tempNodeList.add( lastNode );
+                    if(itemsFromSpurCandidate.contains(lastNode))
+                    {
+                        spurCandidates.add(lastNode);
+                    }
+                    else
+                    {
+                        tempNodeList.add( lastNode );
+                    }
                     ringSize = currentRing.getSize( );
                     continue;
                 }
@@ -307,7 +331,14 @@ public class SolutionGenerator
             else
             {
                 currentRing.removeNode( lastNode );
-                tempNodeList.add( lastNode );
+                if(itemsFromSpurCandidate.contains(lastNode))
+                {
+                    spurCandidates.add(lastNode);
+                }
+                else
+                {
+                    tempNodeList.add( lastNode );
+                }
                 ringSize = currentRing.getSize( );
             }
         }
@@ -316,9 +347,16 @@ public class SolutionGenerator
             while ( ringSize > 0 )
             {
                 lastNodeName = currentRing.getSpecificNodeName( ringSize - 1 );
-                lastNode = QaRsapUtils.getNodeById( lastNodeName, allNodes );
+                lastNode = QaRsapUtils.getNodeById( lastNodeName, allNetworkNodes );
                 currentRing.removeNode( lastNode );
-                tempNodeList.add( lastNode );
+                if(itemsFromSpurCandidate.contains(lastNode))
+                {
+                    spurCandidates.add(lastNode);
+                }
+                else
+                {
+                    tempNodeList.add( lastNode );
+                }
                 ringSize = currentRing.getSize( );
             }
             currentRing = null;
@@ -344,9 +382,8 @@ public class SolutionGenerator
         Ring tertiaryRing = new Ring( );
 
         // Pick a starting ring at random
-        Random randomGenerator = new Random( );
-        int rand = randomGenerator.nextInt( localRings.size( ) );
-        Ring currentRing = localRings.get( rand );
+        int randNum = rand.nextInt(localRings.size( ));
+        Ring currentRing = localRings.get( randNum );
         // nonvisitedRings.remove(currentRing);
         // visitedRings.add(currentRing);
 

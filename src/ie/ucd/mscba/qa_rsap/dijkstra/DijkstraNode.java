@@ -24,7 +24,6 @@ public class DijkstraNode implements Comparable<DijkstraNode>
     String nodeName;
     double distanceToRoot;
     List<String> pathFromRoot;
-    boolean visited;
     List<AdjNode> adjList;
     
     public int compareTo(DijkstraNode o) 
@@ -57,20 +56,7 @@ public class DijkstraNode implements Comparable<DijkstraNode>
     {
         this.adjList = adjList;
     }
-    /**
-     * @return the visited
-     */
-    public boolean isVisited()
-    {
-        return visited;
-    }
-    /**
-     * @param visited the visited to set
-     */
-    public void setVisited(boolean visited)
-    {
-        this.visited = visited;
-    }
+
     /**
      * @return the nodeName
      */

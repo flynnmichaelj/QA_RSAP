@@ -44,7 +44,12 @@ public class NeighbourGenerator
     private List<Node>      networkNodes    = null;
     private Dijkstra        dijkstra        = null;
     private VNSSettings     vnsSettings     = null;
+    
+    //Random generator
+    private static Random rand = new Random();
 
+    private SolutionGenerator solGenerator = null; 
+    
     /**
      * NeighbourGenerator constructor that accepts the network model and the adjacency matrix for all nodes in the
      * network.
@@ -57,6 +62,7 @@ public class NeighbourGenerator
         this.networkNodes = network.getNetworkStructure().getNodes().getNode();
         this.dijkstra = new Dijkstra(this.networkNodes, this.nodeAdjacencies);
         this.vnsSettings = vnsSettings;
+        solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
     }
 
     /**
@@ -66,8 +72,6 @@ public class NeighbourGenerator
     public Solution edgeInsertionSearch(Solution sol)
     {
         Solution clonedSol = sol.clone();
-        
-        Random rand = new Random();
 
         List<Ring> localRings = clonedSol.getLocalrings();
         List<Spur> spurs = clonedSol.getSpurs();
@@ -262,7 +266,7 @@ public class NeighbourGenerator
                     {
                         tempNodeList.remove(spur.getSpurNode());
                     }
-                    SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
+                   
                     Ring tertiaryRing = solGenerator.generateTertiaryRing(clonedSol.getSpurs(), clonedSol.getLocalrings());
                     if(tertiaryRing != null)
                     {
@@ -303,11 +307,11 @@ public class NeighbourGenerator
                     }
                     if(! firstRingConnected)
                     {
-                        addLocalRingToTertiary(tertiaryRing, firstNewRing, new Random(), clonedSol.getSpurs());
+                        addLocalRingToTertiary(tertiaryRing, firstNewRing, rand, clonedSol.getSpurs());
                     }
                     else if(! clonedSplitCandidateconnected)
                     {
-                        addLocalRingToTertiary(tertiaryRing, clonedSpiltCandidate, new Random(), clonedSol.getSpurs());
+                        addLocalRingToTertiary(tertiaryRing, clonedSpiltCandidate, rand, clonedSol.getSpurs());
                     }
                 }
             }
@@ -339,7 +343,6 @@ public class NeighbourGenerator
         tertiaryRing.getNodes().remove(tertiaryRing.getSize() - 1);
 
         // Disconnect selected ring
-        Random rand = new Random();
         Ring initRing = localRings.get(rand.nextInt(localRings.size()));
         for(Node node : initRing.getNodes())
         {
@@ -383,7 +386,6 @@ public class NeighbourGenerator
                     {
                         // Failed to find path
                         clonedSol.setTertiaryRing(null);
-                        SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
                         tertiaryRing = solGenerator.generateTertiaryRing(spurs, localRings);
                         if(tertiaryRing != null)
                         {
@@ -418,7 +420,6 @@ public class NeighbourGenerator
                 if(tertiaryRing == null)
                 {
                     clonedSol.setTertiaryRing(null);
-                    SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
                     tertiaryRing = solGenerator.generateTertiaryRing(spurs, localRings);
                     if(tertiaryRing != null)
                     {
@@ -454,7 +455,6 @@ public class NeighbourGenerator
                 else
                 {
                     clonedSol.setTertiaryRing(null);
-                    SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
                     tertiaryRing = solGenerator.generateTertiaryRing(spurs, localRings);
                     if(tertiaryRing != null)
                     {
@@ -474,7 +474,6 @@ public class NeighbourGenerator
             if(tertiaryRing.getSize() == 1)
             {
                 clonedSol.setTertiaryRing(null);
-                SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
                 tertiaryRing = solGenerator.generateTertiaryRing(spurs, localRings);
                 if(tertiaryRing != null)
                 {
@@ -493,7 +492,6 @@ public class NeighbourGenerator
                 if(! success)
                 {
                     clonedSol.setTertiaryRing(null);
-                    SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
                     tertiaryRing = solGenerator.generateTertiaryRing(spurs, localRings);
                     if(tertiaryRing != null)
                     {
@@ -539,25 +537,46 @@ public class NeighbourGenerator
         }
         if(ringToDelete != null)
         {
+            //First ensure this ring has no spurs
+            if(clonedSol.getSpurs().size() > 0)
+            {
+                List<Spur> spursToAdd = new ArrayList<Spur>();
+                List<Spur> spurs = clonedSol.getSpurs();
+                Iterator<Spur> spurIter = spurs.iterator();
+                while(spurIter.hasNext())
+                {
+                    Spur thisSpur = spurIter.next();
+                    if(QaRsapUtils.isNodeOnRing(thisSpur.getParentNode(), ringToDelete))
+                    {
+                        //if our intended ring to delete has spurs we need to relocation the spurs to other rings
+                        Spur spur = solGenerator.createSrup(thisSpur.getSpurNode(), network.getNetworkStructure().getNodes().getNode(), localRings);
+                        if(spur == null)
+                        {
+                            // Fail Gracefully by return original sol
+                            return sol;
+                        }
+                        else
+                        {
+                            spurIter.remove();
+                            spursToAdd.add(spur);
+                        }
+                    }
+                }
+                for(int i = 0; i < spursToAdd.size(); i++)
+                {
+                    clonedSol.getSpurs().add(spursToAdd.get(i));
+                }
+            }
+            
+            
             List<Node> retries = new ArrayList<Node>();
-
-            Random rand = new Random();
-            SolutionGenerator solGenerator = new SolutionGenerator(network, nodeAdjacencies, vnsSettings);
             for(int i = 0; i < ringToDelete.getSize() - 1; i++)
             {
                 Node thisNode = ringToDelete.getNodes().get(i);
-                Spur spur = solGenerator.createSrup(thisNode, network.getNetworkStructure().getNodes().getNode(), localRings);
-                if(spur == null)
+                Ring modifiedRing = insert(thisNode, localRings);
+                if(modifiedRing == null)
                 {
                     retries.add(thisNode);
-                }
-                else
-                {
-                    Ring modifiedRing = insert(spur.getSpurNode(), localRings);
-                    if(modifiedRing == null)
-                    {
-                        retries.add(thisNode);
-                    }
                 }
             }
 
@@ -565,21 +584,26 @@ public class NeighbourGenerator
             for(int i = 0; i < retries.size(); i++)
             {
                 Node thisNode = retries.get(i);
-                Spur spur = solGenerator.createSrup(thisNode, network.getNetworkStructure().getNodes().getNode(), localRings);
-                if(spur == null)
+                Ring modifiedRing = insert(thisNode, localRings);
+                if(modifiedRing == null)
                 {
-                    // Fail Gracefully by return original sol
-                    return sol;
-                }
-                else
-                {
-                    Ring modifiedRing = insert(spur.getSpurNode(), localRings);
-                    if(modifiedRing == null)
+                    Spur spur = solGenerator.createSrup(thisNode, network.getNetworkStructure().getNodes().getNode(), localRings);
+                    if(spur == null)
                     {
                         // Fail Gracefully by return original sol
                         return sol;
                     }
-                }
+                    else
+                    {
+                       clonedSol.getSpurs().add(spur);
+                    }
+                }                
+            }
+            
+            //Final attempt, insert two spurs as an edge
+            if(clonedSol.getSpurs().size() >=2)
+            {
+                clonedSol = edgeInsertionSearch(clonedSol);
             }
         }
         //if Successful and only one ring remains, remove the tertiarty Ring
@@ -608,11 +632,11 @@ public class NeighbourGenerator
     public Solution deleteInsertSearch(Solution sol)
     {
         Solution clonedSol = sol.clone();
-        Random rand = new Random();
 
         List<Ring> localRings = clonedSol.getLocalrings();
         List<Spur> spurs = clonedSol.getSpurs();
 
+        boolean spurModified  = false;
         // First try to eliminate spurs
         if(spurs != null && spurs.size() > 0)
         {
@@ -624,9 +648,23 @@ public class NeighbourGenerator
             if(modifiedRing != null)
             {
                 spurs.remove(pickedSpur);
+                spurModified = true;
+            }
+            else
+            {
+                //Readd spur to its closest ring
+                Spur newSpur = solGenerator.createSrup(pickedSpur.getSpurNode(), networkNodes, localRings);
+                if(newSpur!=null && !(newSpur.getParentNode().getId()).equalsIgnoreCase(pickedSpur.getParentNode().getId()))
+                {
+                    spurs.remove(pickedSpur);
+                    spurs.add(newSpur);
+                    spurModified = true;
+                }            
             }
         }
-        else
+        //If no modification were made on spurs, try to delete insert a node.
+        //Avoids this elements of the VNS getting trapped.
+        if (!spurModified)
         {
             if(sol.getLocalrings().size() > 1)
             {
@@ -658,7 +696,6 @@ public class NeighbourGenerator
         Solution clonedSol = sol.clone();
         List<Ring> localRings = clonedSol.getLocalrings();
 
-        Random rand = new Random();
         boolean changeFound = false;
         int maxTries = 0;
         while(! changeFound && maxTries < 5)
@@ -851,7 +888,7 @@ public class NeighbourGenerator
                 if(clonedListForDel.size() > 0)
                     selectedRing = clonedListForDel.get(rand.nextInt(clonedListForDel.size()));
                 else
-                    break; // TODO consider catering for many small rings by deleting one ring
+                    break; 
             }
 
             boolean notOnTertiaryRing = false;

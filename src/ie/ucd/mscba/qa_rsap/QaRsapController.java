@@ -27,6 +27,7 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
 
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Display;
@@ -57,6 +58,11 @@ public class QaRsapController
     ProgressBar progressBarO         = null;
     ProgressBar progressBarS         = null;
     JMapViewer map                  = null;
+    
+    private NeighbourGenerator ng = null;
+    
+    //Random generator
+    private static Random rand = new Random();
     
     private boolean stopRequested = false;
     
@@ -138,12 +144,14 @@ public class QaRsapController
             }
             else
                 i--;
+  
         }
         
         //=====================================
         //(3)   Call anneal on initial solution
         //=====================================
-       
+        ng = new NeighbourGenerator(nodeAdjacencies, network, vnsSetting);
+        
         //Annealing properteis
         int n_ann_q = (int)(annealSettings.getInitQAfluct()/annealSettings.getQaFluctSteps());
         int n_ann_c = (int)((annealSettings.getInitSATemp()-annealSettings.getFinalSATemp())/annealSettings.getSaDeltaTemp());
@@ -211,6 +219,8 @@ public class QaRsapController
             updateProgressBar((calcForProgessBar*100) , display, progressBarO);
             
             updateMap(perSearchBest[iSearch], map, network.getNetworkStructure().getNodes().getCoordinatesType());
+            
+            updateResultsPanel("This Search Best " + (iSearch+1) + "  = " + perSearchBest[iSearch].getTotalCost(), true, display, outputArea);  
         }
         
         //finished Annealing
@@ -222,8 +232,10 @@ public class QaRsapController
             if(perSearchBest[i].getTotalCost( ) < overAllBestCost)
             {
                 overAllBestSol = perSearchBest[i];
+                overAllBestCost = perSearchBest[i].getTotalCost( );
             }
         }
+        overAllBestSol.calculateTotalCost(networkLinks, vnsSetting.getSpurPenalty());
         //===================================
         //(4)   Output final results
         //===================================
@@ -259,10 +271,7 @@ public class QaRsapController
         else
         {
             betaTrotter = 0.0;
-        }
-        
-        //Setup Neighbourhood search generator
-        NeighbourGenerator ng = new NeighbourGenerator(nodeAdjacencies, network, vnsSetting);
+        }      
 
         for (int istep = 0; istep<nmcs ; istep++)                 // loop over number of searches
         {
@@ -270,8 +279,12 @@ public class QaRsapController
             if(stopRequested)
                 return;
             
-            //for (int j = 0; j<network.getNetworkStructure( ).getNodes( ).getNode( ).size( ) ; j++) //TODO Our Run by time within VNS may cater for this       
-            //{
+            for (int j = 0; j<network.getNetworkStructure( ).getNodes( ).getNode( ).size( ) ; j++) //TODO Our Run by time within VNS may cater for this       
+            {
+              //Stops the proccess if requested by the user
+                if(stopRequested)
+                    return;
+         
                 for (int k = 0; k<annealSettings.getTrotterSlices(); k++)           // loop over Trotter slices      
                 {
                    //Stops the proccess if requested by the user
@@ -281,20 +294,20 @@ public class QaRsapController
                     Solution vnsResult = currrentSliceSolutions[k];
             
                     //Pick the neighbourhood by probability.
-                    double probRunBytimes = Math.random( );
+                    double probRunBytimes = rand.nextDouble();
                     double probPickNeighbourhood = Math.abs(probRunBytimes - 0.5);
                     
                     //Determine how many time we want to run this neighbourhood search on this iteration 
                     long runBytimes = 1;
-                    if(probRunBytimes > Constants.PROB_MULTIPLE_RUNS)
+                    /*if(probRunBytimes > Constants.PROB_MULTIPLE_RUNS)
                     {
                         //Number of times to run is based on a proportion of the number of nodes
-                        runBytimes = Math.round((network.getNetworkStructure( ).getNodes( ).getNode( ).size( ))*Math.random( ));
+                        runBytimes = Math.round((network.getNetworkStructure( ).getNodes( ).getNode( ).size( ))*rand.nextDouble());
                         if(runBytimes < 1)
                         {
                             runBytimes = 1;
                         }
-                    }
+                    }*/
                     
                     if(probPickNeighbourhood <= Constants.PORB_LR_DELETE_INSERT)
                     {
@@ -309,7 +322,10 @@ public class QaRsapController
                     }
                     else if((probPickNeighbourhood > Constants.PROB_LR_NODE_SWAP) && (probPickNeighbourhood < Constants.PROB_LR_DELETE_SMALL_RING))
                     {
-                        vnsResult = invokeVNS(currrentSliceSolutions[k],runBytimes, 3 , networkLinks, ng, nodeAdjacencies); 
+                        if(currrentSliceSolutions[k].getLocalrings( ).size( ) > 2)
+                        {
+                            vnsResult = invokeVNS(currrentSliceSolutions[k],runBytimes, 3 , networkLinks, ng, nodeAdjacencies); 
+                        }
                     }
                     else if((probPickNeighbourhood > Constants.PROB_LR_DELETE_SMALL_RING) && (probPickNeighbourhood < Constants.PROB_LR_SPLIT))
                     {
@@ -347,7 +363,7 @@ public class QaRsapController
                        change = changHolder.getChangem( ) + changHolder.getChangep( );
                     } 
                     
-                    double decisionFactor = Math.random( );
+                    double decisionFactor = rand.nextDouble();
                     if(decisionFactor < Math.pow( Math.E, (-beta*scaledDiff - betaTrotter*(double)change))) 
                     {
                         currrentSliceSolutions[k] = vnsResult;
@@ -376,7 +392,7 @@ public class QaRsapController
                         }
                     }
                 }
-            //}           
+            }           
         }
         
         totalAcc = totalAcc/((double)nmcs*(double)annealSettings.getTrotterSlices());  
@@ -414,7 +430,7 @@ public class QaRsapController
                     break;
             }
             
-            nsHolder.calculateTotalCost(networkLinks);
+            nsHolder.calculateTotalCost(networkLinks, Constants.INTERNAL_SPUR_PEN);
             if(bestVNSCost > nsHolder.getTotalCost( ))
             {
                 bestVNSSol = nsHolder;

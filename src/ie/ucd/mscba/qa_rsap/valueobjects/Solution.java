@@ -169,7 +169,7 @@ public class Solution
         this.totalCost = totalCost;
     }
 
-    public void calculateTotalCost(List<Link> links)
+    public void calculateTotalCost(List<Link> links, int spurPenalty)
     {
         double totalCost = 0.0;
         double ringsAndSpursCost = 0.0;
@@ -190,9 +190,9 @@ public class Solution
         // Calculate spurs cost
         for(Spur spur : getSpurs())
         {
-            totalCost = totalCost + spur.getSpurCost(links, vnsSettings.getSpurPenalty(), vnsSettings.getCapacityModule());
+            totalCost = totalCost + spur.getSpurCost(links, spurPenalty, vnsSettings.getCapacityModule());
             ringsAndSpursCost = ringsAndSpursCost
-                            + spur.getSpurCost(links, vnsSettings.getSpurPenalty(), vnsSettings.getCapacityModule());
+                            + spur.getSpurCost(links, spurPenalty, vnsSettings.getCapacityModule());
         }
 
         setTotalCost(totalCost);
