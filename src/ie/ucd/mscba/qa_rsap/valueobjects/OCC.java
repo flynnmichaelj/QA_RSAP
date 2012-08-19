@@ -10,9 +10,6 @@
  */
 package ie.ucd.mscba.qa_rsap.valueobjects;
 
-import ie.ucd.mscba.qa_rsap.Constants;
-import ie.ucd.mscba.qa_rsap.settings.AnnealSettings;
-
 import java.util.ArrayList;
 import java.util.List;
 

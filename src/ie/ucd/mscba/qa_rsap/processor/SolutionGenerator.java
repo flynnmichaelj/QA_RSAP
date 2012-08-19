@@ -10,7 +10,6 @@
  */
 package ie.ucd.mscba.qa_rsap.processor;
 
-import ie.ucd.mscba.qa_rsap.Constants;
 import ie.ucd.mscba.qa_rsap.dijkstra.Dijkstra;
 import ie.ucd.mscba.qa_rsap.dijkstra.DijkstraNode;
 import ie.ucd.mscba.qa_rsap.settings.VNSSettings;
@@ -132,7 +131,7 @@ public class SolutionGenerator
                 return null; // No valid initial sol found;
             }
         }
-        sol.calculateTotalCost( network.getNetworkStructure( ).getLinks( ).getLink( ), Constants.INTERNAL_SPUR_PEN);
+        sol.calculateTotalCost( network.getNetworkStructure( ).getLinks( ).getLink( ), vnsSettings.getSpurPenalty()); //remove internal spur pen
         //System.out.println( "Total solution Cost : " + sol.getTotalCost( ) );
         return sol;
     }
@@ -271,48 +270,41 @@ public class SolutionGenerator
         Node lastNode = null;
 
         int ringSize = currentRing.getSize( );
-        while ( ringSize > 2 )
+        while ( ringSize >= 2 )
         {
             lastNodeName = currentRing.getSpecificNodeName( ringSize - 1 );
             List<AdjNode> adjList = nodeAdjacencies.getAdjList( lastNodeName );
             lastNode = QaRsapUtils.getNodeById( lastNodeName, allNetworkNodes );
 
-            if ( QaRsapUtils.isAdj( currentRing.getSpecificNodeName( 0 ), adjList ) )
+            if(ringSize == 2)
             {
-                currentRing.addNode( currentRing.getSpecificNode( 0 ) );
-                ringComplete = true;
-                break;
-            }
-            else if ( ringSize < vnsSettings.getInitMaxLRSize()-1 )
-            {
-                List<String> nodesToRemove = QaRsapUtils.nodesToRemove( currentRing, null, rings, new String[] {
-                        lastNodeName, currentRing.getSpecificNodeName( 0 ) } );
-                List<DijkstraNode> returnedNodes = dijkstra.runDijkstra( lastNode, currentRing.getSpecificNode( 0 ),
-                                                                            nodesToRemove);
-
-                if ( returnedNodes != null
-                                && returnedNodes.get( 0 ).getPathFromRoot( ).size( ) < (vnsSettings.getMaxLocalRingSize() - ringSize) )
+                for(int i=0; i<adjList.size(); i++ )
                 {
-                    DijkstraNode returnedNode = returnedNodes.get( 0 );
-                    List<String> pathList = returnedNode.getPathFromRoot( );
-
-                    for ( int j = 0; j < pathList.size( ) - 1; j++ )
+                    AdjNode adjNode = adjList.get(i);
+                    Node thisAdjNode = QaRsapUtils.getNodeById( adjNode.getNodeName(), allNetworkNodes );
+                    if(QaRsapUtils.isAdj(thisAdjNode.getId(), nodeAdjacencies.getAdjList(currentRing.getSpecificNodeName( 0 )))
+                                    && !thisAdjNode.getId().equalsIgnoreCase(currentRing.getNodes().get( 0).getId()))
                     {
-                        Node thisNode = QaRsapUtils.getNodeById( pathList.get( j ), allNetworkNodes );
-                        currentRing.addNode( thisNode );
-                        if(tempNodeList.contains( thisNode ))
+                        if(tempNodeList.contains(thisAdjNode))
                         {
-                            tempNodeList.remove( thisNode );
+                            currentRing.addNode(thisAdjNode);
+                            currentRing.addNode(currentRing.getNodes().get( 0));
+                            tempNodeList.remove(thisAdjNode);
+                            ringComplete = true;
+                            break;
                         }
-                        else if(spurCandidates.contains( thisNode ))
+                        else if(spurCandidates.contains(thisAdjNode))
                         {
-                            spurCandidates.remove( thisNode );
+                            currentRing.addNode(thisAdjNode);
+                            currentRing.addNode(currentRing.getNodes().get( 0));
+                            spurCandidates.remove(thisAdjNode);
+                            ringComplete = true;
+                            break;
                         }
                     }
-                    currentRing.addNode( currentRing.getSpecificNode( 0 ) );
-                    ringComplete = true;
-                    break;
                 }
+                if(ringComplete)
+                    break;
                 else
                 {
                     currentRing.removeNode( lastNode );
@@ -330,18 +322,73 @@ public class SolutionGenerator
             }
             else
             {
-                currentRing.removeNode( lastNode );
-                if(itemsFromSpurCandidate.contains(lastNode))
+                if ( QaRsapUtils.isAdj( currentRing.getSpecificNodeName( 0 ), adjList ) )
                 {
-                    spurCandidates.add(lastNode);
+                    currentRing.addNode( currentRing.getSpecificNode( 0 ) );
+                    ringComplete = true;
+                    break;
+                }
+                else if ( ringSize < vnsSettings.getInitMaxLRSize()-1 )
+                {
+                    List<String> nodesToRemove = QaRsapUtils.nodesToRemove( currentRing, null, rings, new String[] {
+                            lastNodeName, currentRing.getSpecificNodeName( 0 ) } );
+                    List<DijkstraNode> returnedNodes = dijkstra.runDijkstra( lastNode, currentRing.getSpecificNode( 0 ),
+                                                                                nodesToRemove);
+    
+                    if ( returnedNodes != null
+                                    && returnedNodes.get( 0 ).getPathFromRoot( ).size( ) < (vnsSettings.getMaxLocalRingSize() - ringSize) )
+                    {
+                        DijkstraNode returnedNode = returnedNodes.get( 0 );
+                        List<String> pathList = returnedNode.getPathFromRoot( );
+    
+                        for ( int j = 0; j < pathList.size( ) - 1; j++ )
+                        {
+                            Node thisNode = QaRsapUtils.getNodeById( pathList.get( j ), allNetworkNodes );
+                            currentRing.addNode( thisNode );
+                            if(tempNodeList.contains( thisNode ))
+                            {
+                                tempNodeList.remove( thisNode );
+                            }
+                            else if(spurCandidates.contains( thisNode ))
+                            {
+                                spurCandidates.remove( thisNode );
+                            }
+                        }
+                        currentRing.addNode( currentRing.getSpecificNode( 0 ) );
+                        ringComplete = true;
+                        break;
+                    }
+                    else
+                    {
+                        currentRing.removeNode( lastNode );
+                        if(itemsFromSpurCandidate.contains(lastNode))
+                        {
+                            spurCandidates.add(lastNode);
+                        }
+                        else
+                        {
+                            tempNodeList.add( lastNode );
+                        }
+                        ringSize = currentRing.getSize( );
+                        continue;
+                    }
                 }
                 else
                 {
-                    tempNodeList.add( lastNode );
+                    currentRing.removeNode( lastNode );
+                    if(itemsFromSpurCandidate.contains(lastNode))
+                    {
+                        spurCandidates.add(lastNode);
+                    }
+                    else
+                    {
+                        tempNodeList.add( lastNode );
+                    }
+                    ringSize = currentRing.getSize( );
                 }
-                ringSize = currentRing.getSize( );
             }
         }
+        
         if ( !ringComplete ) // Ring cannot be complete, disassamble ring.
         {
             while ( ringSize > 0 )
@@ -374,7 +421,6 @@ public class SolutionGenerator
     {
         List<Node> allNetworkNodes = network.getNetworkStructure( ).getNodes( ).getNode( );
 
-        boolean validTertiaryRingFound = true;
         List<Ring> nonvisitedRings = new ArrayList<Ring>( localRings );
         List<Ring> visitedRings = new ArrayList<Ring>( );
 

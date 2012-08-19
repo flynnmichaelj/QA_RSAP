@@ -70,40 +70,49 @@ public class QaRsapUtils
     public static boolean isAdj(String nodeName, List<AdjNode> adjList)
     {
         boolean adj = false;
-        for (int i=0; i<adjList.size( ); i++)
+        if(adjList != null)
         {
-            if(nodeName.equalsIgnoreCase(adjList.get(i).getNodeName()))
+            for (int i=0; i<adjList.size( ); i++)
             {
-                adj = true;
-                break;
-            }
-        }  
+                if(nodeName.equalsIgnoreCase(adjList.get(i).getNodeName()))
+                {
+                    adj = true;
+                    break;
+                }
+            }  
+        }
         return adj;
     }
     
     public static double isAdjCost(String nodeName, List<AdjNode> adjList)
     {
         double adjCost = 0.0;
-        for (int i=0; i<adjList.size( ); i++)
+        if(adjList != null)
         {
-            if(nodeName.equalsIgnoreCase(adjList.get(i).getNodeName()))
+            for (int i=0; i<adjList.size( ); i++)
             {
-                adjCost=adjList.get(i).getCost( );
-                break;
-            }
-        }  
+                if(nodeName.equalsIgnoreCase(adjList.get(i).getNodeName()))
+                {
+                    adjCost=adjList.get(i).getCost( );
+                    break;
+                }
+            }  
+        }
         return adjCost;
     }
     
     public static boolean isNodeOnRing(Node node, Ring ring)
     {
         boolean isOnRing = false;
-        for(Node thisNode : ring.getNodes( ))
+        if(ring != null)
         {
-            if(thisNode.getId( ).equalsIgnoreCase(node.getId( )))
+            for(Node thisNode : ring.getNodes( ))
             {
-                isOnRing = true;    
-                break;
+                if(thisNode.getId( ).equalsIgnoreCase(node.getId( )))
+                {
+                    isOnRing = true;    
+                    break;
+                }
             }
         }
         return isOnRing;

@@ -13,8 +13,6 @@ package ie.ucd.mscba.qa_rsap.ui;
 import ie.ucd.mscba.qa_rsap.QaRsapController;
 import ie.ucd.mscba.qa_rsap.settings.AppSettings;
 
-import java.util.concurrent.TimeUnit;
-
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;

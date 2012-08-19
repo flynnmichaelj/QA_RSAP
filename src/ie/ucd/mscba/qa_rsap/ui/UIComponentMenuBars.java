@@ -19,7 +19,6 @@ import java.awt.Color;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
-import java.util.List;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CLabel;
@@ -39,13 +38,9 @@ import org.eclipse.swt.widgets.FileDialog;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Spinner;
-import org.openstreetmap.gui.jmapviewer.JMapViewer;
-import org.openstreetmap.gui.jmapviewer.MapMarkerDot;
 
 import de.zib.sndlib.network.AdditionalModules;
 import de.zib.sndlib.network.Network;
-import de.zib.sndlib.network.Node;
-import de.zib.sndlib.network.Nodes;
 
 /**
  * 
@@ -211,6 +206,7 @@ public class UIComponentMenuBars
                             mapComponent.setMapLabel("Pixel coodinate types are not supported on map view.", Color.RED);
                         
                         mapComponent.loadNodesOnMap(network.getNetworkStructure().getNodes());
+                        mapComponent.getMap().setDisplayToFitMapMarkers();
                     }
                     else
                     {
@@ -247,10 +243,10 @@ public class UIComponentMenuBars
         com_initMaxLRS.setEnabled(false);
         com_initMaxLRS.addSelectionListener(new SelectionAdapter() {
             public void widgetSelected(SelectionEvent e) {
-                if(Integer.parseInt(com_maxLRS.getText()) <= Integer.parseInt(com_initMaxLRS.getText()))
+                if(Integer.parseInt(com_maxLRS.getText()) < Integer.parseInt(com_initMaxLRS.getText()))
                 { 
                     lab_initMaxLRS_Valid.setImage(img_error);
-                    lab_initMaxLRS_Valid.setToolTipText("Max local ring size must be greater than initial local ring size");
+                    lab_initMaxLRS_Valid.setToolTipText("Max local ring size must be >= initial local ring size");
                     butt_start.setEnabled(false);
                 }
                 else
@@ -275,10 +271,10 @@ public class UIComponentMenuBars
         com_maxLRS.setEnabled(false);
         com_maxLRS.addSelectionListener(new SelectionAdapter() {
             public void widgetSelected(SelectionEvent e) {
-             if(Integer.parseInt(com_maxLRS.getText()) <= Integer.parseInt(com_initMaxLRS.getText()))
+             if(Integer.parseInt(com_maxLRS.getText()) < Integer.parseInt(com_initMaxLRS.getText()))
              { 
                  lab_maxLRS_Valid.setImage(img_error);
-                 lab_maxLRS_Valid.setToolTipText("Max local ring size must be greater than initial local ring size");
+                 lab_maxLRS_Valid.setToolTipText("Max local ring size must be >= initial local ring size");
                  butt_start.setEnabled(false);
              }
              else

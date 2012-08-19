@@ -12,7 +12,6 @@ package ie.ucd.mscba.qa_rsap.valueobjects;
 
 import ie.ucd.mscba.qa_rsap.utils.QaRsapUtils;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -22,8 +21,6 @@ import java.util.List;
 import de.zib.sndlib.network.AddModule;
 import de.zib.sndlib.network.AdditionalModules;
 import de.zib.sndlib.network.Link;
-import de.zib.sndlib.network.Links;
-import de.zib.sndlib.network.Network;
 
 /**
  * 
@@ -69,45 +66,53 @@ public class NodeAdjacencies
                List<AdjNode> sourceAdj = adjacencies.get(source);
                List<AdjNode> targetAdj = adjacencies.get(target);
                
-               AdjNode srcAdjNode = new AdjNode();
-               
-               //Record sources adj
-               if(sourceAdj == null)
-               { 
-                   sourceAdj = new ArrayList<AdjNode>();
-                   srcAdjNode.setNodeName(target);
-                   srcAdjNode.setCost(cost);
-                   sourceAdj.add(srcAdjNode);
-                   adjacencies.put(source, sourceAdj );                  
-               }
-               else
+               //Note: if we decide to pick lowest or highest link, cater for cost of 0.0
+               if(!QaRsapUtils.isAdj(target, sourceAdj))
                {
-                   srcAdjNode.setNodeName(target);
-                   srcAdjNode.setCost(cost);
-                   sourceAdj.add(srcAdjNode);                   
+                   AdjNode srcAdjNode = new AdjNode();
+                   
+                   //Record sources adj
+                   if(sourceAdj == null)
+                   { 
+                       sourceAdj = new ArrayList<AdjNode>();
+                       srcAdjNode.setNodeName(target);
+                       srcAdjNode.setCost(cost);
+                       sourceAdj.add(srcAdjNode);
+                       adjacencies.put(source, sourceAdj );                  
+                   }
+                   else
+                   {
+                       srcAdjNode.setNodeName(target);
+                       srcAdjNode.setCost(cost);
+                       sourceAdj.add(srcAdjNode);                   
+                   }
+                   
                }
                
-               AdjNode targAdjNode = new AdjNode();
-               //Record target adj
-               if(targetAdj == null)
-               { 
-                   
-                   targetAdj = new ArrayList<AdjNode>();
-                   targAdjNode.setNodeName(source);
-                   targAdjNode.setCost(cost);
-                   targetAdj.add(targAdjNode);
-                   adjacencies.put(target, targetAdj );                  
-               }
-               else
+               if(!QaRsapUtils.isAdj(source, targetAdj))
                {
-                   targAdjNode.setNodeName(source);
-                   targAdjNode.setCost(cost);
-                   targetAdj.add(targAdjNode);
-                   
+                   AdjNode targAdjNode = new AdjNode();
+                   //Record target adj
+                   if(targetAdj == null)
+                   { 
+                       
+                       targetAdj = new ArrayList<AdjNode>();
+                       targAdjNode.setNodeName(source);
+                       targAdjNode.setCost(cost);
+                       targetAdj.add(targAdjNode);
+                       adjacencies.put(target, targetAdj );                  
+                   }
+                   else
+                   {
+                       targAdjNode.setNodeName(source);
+                       targAdjNode.setCost(cost);
+                       targetAdj.add(targAdjNode);
+                       
+                   }
                }
            }
            
-           Enumeration enumList =  adjacencies.keys();
+           Enumeration<String> enumList =  adjacencies.keys();
            while (enumList.hasMoreElements( ))
            {
                String thisKey = (String)enumList.nextElement( );
@@ -128,7 +133,7 @@ public class NodeAdjacencies
             NodeAdjacencies cloned = new NodeAdjacencies();
             Hashtable<String,List<AdjNode>> cloneAdjacencies = new Hashtable<String,List<AdjNode>>();
             
-            Enumeration enumList =  adjacencies.keys();
+            Enumeration<String> enumList =  adjacencies.keys();
             while (enumList.hasMoreElements( ))
             {
                 String thisKey = (String)enumList.nextElement( );

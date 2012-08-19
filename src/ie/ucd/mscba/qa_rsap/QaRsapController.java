@@ -29,15 +29,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
-import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.ProgressBar;
 import org.eclipse.swt.widgets.Text;
 import org.openstreetmap.gui.jmapviewer.Coordinate;
 import org.openstreetmap.gui.jmapviewer.JMapViewer;
-import org.openstreetmap.gui.jmapviewer.MapMarkerDot;
 import org.openstreetmap.gui.jmapviewer.MapPolygonImpl;
-import org.openstreetmap.gui.jmapviewer.events.JMVCommandEvent;
 
 import de.zib.sndlib.network.Link;
 import de.zib.sndlib.network.Network;
@@ -106,16 +103,18 @@ public class QaRsapController
         SolutionGenerator qaRsapProcessor = new SolutionGenerator(network, nodeAdjacencies, vnsSetting);
         
         updateResultsPanel("===================================================================", false, display, outputArea);
-        updateResultsPanel("Genrating initial Soltutions.", true, display, outputArea);
+        updateResultsPanel("Generating initial Solutions.", true, display, outputArea);
         
         Solution[] initialSolutions = new Solution[annealSettings.getNumSearches()];
+       
         for(int i=0; i<annealSettings.getNumSearches(); i++ )
         {
-            
             Solution thisInitSol  = null;
             int initSolCounter = 1;
+            int attemptCounter = 0;
             while(thisInitSol == null && initSolCounter <= 10 && !stopRequested)
             {
+                attemptCounter ++;
                 thisInitSol = qaRsapProcessor.getInitialSolution();
                 if(thisInitSol != null)
                 {
@@ -124,12 +123,15 @@ public class QaRsapController
                     if(!valid)
                     {
                         System.out.println("ERROR: INIT SOLUTION NOT VALID");
-                        updateResultsPanel("Ininial Solution invalid, Attempting retry.", true, display, outputArea);
+                        updateResultsPanel("Initial Solution invalid, Attempting retry.", true, display, outputArea);
                         thisInitSol = null;
                     }
                 }
                 else
-                    updateResultsPanel("Ininial Solution not found, Attempting retry.", true, display, outputArea);
+                {
+                    if(attemptCounter % 10 == 0)
+                        updateResultsPanel(" . ", false, display, outputArea);
+                }
                 initSolCounter++;
             }
             if(stopRequested)
@@ -139,7 +141,8 @@ public class QaRsapController
             {
                 initialSolutions[i] = thisInitSol; //TODO
                 perSearchBest[i] = thisInitSol;
-                updateResultsPanel("Initial Solution " + (i+1) + " Found", true, display, outputArea);
+                updateResultsPanel("Initial Solution " + (i+1) + " Found: Rings:" +thisInitSol.getLocalrings().size()
+                                    +" Spurs:" +thisInitSol.getSpurs().size() + " Cost:" + thisInitSol.getTotalCost() , true, display, outputArea);
                 
             }
             else
@@ -191,7 +194,6 @@ public class QaRsapController
             }
             
             int iann = n_ann;
-            Solution annealedSol = null;
             updateResultsPanel("Search " + (iSearch+1) , true, display, outputArea);
             while( iann > 0) /// main annealing loop
             {  
@@ -294,9 +296,9 @@ public class QaRsapController
                     Solution vnsResult = currrentSliceSolutions[k];
             
                     //Pick the neighbourhood by probability.
-                    double probRunBytimes = rand.nextDouble();
-                    double probPickNeighbourhood = Math.abs(probRunBytimes - 0.5);
-                    
+                    //double probRunBytimes = rand.nextDouble();
+                    //double probPickNeighbourhood = Math.abs(probRunBytimes - 0.5);
+                    double probPickNeighbourhood = rand.nextDouble();
                     //Determine how many time we want to run this neighbourhood search on this iteration 
                     long runBytimes = 1;
                     /*if(probRunBytimes > Constants.PROB_MULTIPLE_RUNS)
@@ -430,7 +432,7 @@ public class QaRsapController
                     break;
             }
             
-            nsHolder.calculateTotalCost(networkLinks, Constants.INTERNAL_SPUR_PEN);
+            nsHolder.calculateTotalCost(networkLinks, vnsSetting.getSpurPenalty()); //Removed internal spur pen
             if(bestVNSCost > nsHolder.getTotalCost( ))
             {
                 bestVNSSol = nsHolder;

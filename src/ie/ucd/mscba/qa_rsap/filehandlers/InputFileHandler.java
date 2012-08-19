@@ -34,7 +34,8 @@ public class InputFileHandler
         {
             jc = JAXBContext.newInstance("de.zib.sndlib.network");
             unmarshaller = jc.createUnmarshaller();
-            JAXBElement element = (JAXBElement)unmarshaller.unmarshal(new File(fileName));
+            @SuppressWarnings( "unchecked" )
+            JAXBElement<Network> element = (JAXBElement<Network>)unmarshaller.unmarshal(new File(fileName));
             network = (Network)element.getValue( );
         }
         catch ( JAXBException e )

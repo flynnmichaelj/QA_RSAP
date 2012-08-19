@@ -12,7 +12,6 @@ package ie.ucd.mscba.qa_rsap.ui;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.SashForm;
-import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Text;
 
 /**
@@ -20,12 +19,9 @@ import org.eclipse.swt.widgets.Text;
  */
 public class UIComponentResultsPanel
 {
-    private Text outputArea = null;
     public Text buildResultsPanel(SashForm displaySash)
     {
         final Text outputArea = new Text(displaySash, SWT.BORDER | SWT.MULTI |  SWT.V_SCROLL | SWT.WRAP);       
         return outputArea;
-    }
-    
-    
+    }   
 }

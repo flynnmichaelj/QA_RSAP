@@ -130,13 +130,12 @@ public class MainWindow
         
         // Create the SashForm with vertical (Contains browser and results components)
         SashForm displaySash = new SashForm(menuSash, SWT.VERTICAL);
-        GridLayout displaySashLayout = new GridLayout();
         displaySash.setLayout(menuSashLayout);
         displaySash.setLayoutData( new GridData( GridData.FILL, GridData.FILL, true, true ));
         
         //Add Map Component
         mapComponent = new UIComponentMap( );
-        mapComponent.buildMapComponent( displaySash, menuSash, display );
+        mapComponent.buildMapComponent(displaySash, menuSash, display );
         menuBars.setMapComponent(mapComponent);
         
  

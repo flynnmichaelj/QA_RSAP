@@ -110,22 +110,24 @@ public class NeighbourGenerator
                     }
 
                     // Try leftSide first
-                    boolean operationComplete = false;
+                    Spur secondSpurLeft = null;
+                    boolean leftSideModified = false;
+                    Ring leftChoice  = closestRing.clone();
                     List<AdjNode> leftNodeAdjs = nodeAdjacencies.getAdjList(leftNode.getId());
                     for(int j = 0; j < leftNodeAdjs.size(); j++)
                     {
                         AdjNode current = leftNodeAdjs.get(j); 
                         Node currentNode = QaRsapUtils.getNodeById(current.getNodeName(), networkNodes);
-                        Spur secondSpur = QaRsapUtils.isNodeASpur(current.getNodeName(), spurs);
-                        if(secondSpur != null && currentNode != firstSpur.getSpurNode())
+                        secondSpurLeft = QaRsapUtils.isNodeASpur(current.getNodeName(), spurs);
+                        if(secondSpurLeft != null && currentNode != firstSpur.getSpurNode())
                         {
                             if(QaRsapUtils.isAdj(current.getNodeName(), spurAdjs))
                             {
-                                closestRing.getNodes().add(posLeftNode + 1, currentNode);
-                                closestRing.getNodes().add(posLeftNode + 2, firstSpur.getSpurNode());
-                                spurs.remove(firstSpur);
-                                spurs.remove(secondSpur);
-                                operationComplete = true;
+                                leftChoice.getNodes().add(posLeftNode + 1, currentNode);
+                                leftChoice.getNodes().add(posLeftNode + 2, firstSpur.getSpurNode());
+                                //spurs.remove(firstSpur);
+                                //spurs.remove(secondSpur);
+                                leftSideModified = true;
                                 break;
                             }
                         }
@@ -134,27 +136,26 @@ public class NeighbourGenerator
                             continue;
                         }
                     }
-                    if(operationComplete)
-                    {
-                        break;
-                    }
 
                     // Try Right Side next
+                    Spur secondSpurRight = null;
+                    boolean rightSideModified = false;
+                    Ring rightChoice  = closestRing.clone();
                     List<AdjNode> rightNodeAdjs = nodeAdjacencies.getAdjList(rightNode.getId());
                     for(int j = 0; j < rightNodeAdjs.size(); j++)
                     {
                         AdjNode current = rightNodeAdjs.get(j); 
                         Node currentNode = QaRsapUtils.getNodeById(current.getNodeName(), networkNodes);
-                        Spur secondSpur = QaRsapUtils.isNodeASpur(current.getNodeName(), spurs);
-                        if(secondSpur != null && currentNode != firstSpur.getSpurNode())
+                        secondSpurRight = QaRsapUtils.isNodeASpur(current.getNodeName(), spurs);
+                        if(secondSpurRight != null && currentNode != firstSpur.getSpurNode())
                         {
                             if(QaRsapUtils.isAdj(current.getNodeName(), spurAdjs))
                             {
-                                closestRing.getNodes().add(posRightNode, firstSpur.getSpurNode());
-                                closestRing.getNodes().add(posRightNode + 1, currentNode);
-                                spurs.remove(firstSpur);
-                                spurs.remove(secondSpur);
-                                operationComplete = true;
+                                rightChoice.getNodes().add(posRightNode, firstSpur.getSpurNode());
+                                rightChoice.getNodes().add(posRightNode + 1, currentNode);
+                                //spurs.remove(firstSpur);
+                                //spurs.remove(secondSpur);
+                                rightSideModified = true;
                                 break;
                             }
                         }
@@ -163,8 +164,40 @@ public class NeighbourGenerator
                             continue;
                         }
                     }
-                    if(operationComplete)
-                        break;
+                    
+                    if(leftSideModified && rightSideModified)
+                    {
+                        double leftSideCost = leftChoice.getRingCost(networkLinks, vnsSettings.getCapacityModule());
+                        double rightSideCost = rightChoice.getRingCost(networkLinks, vnsSettings.getCapacityModule());
+                        if(leftSideCost < rightSideCost)
+                        {
+                            localRings.remove(closestRing);
+                            localRings.add(leftChoice);
+                            spurs.remove(firstSpur);
+                            spurs.remove(secondSpurLeft);
+                        }
+                        else
+                        {
+                            localRings.remove(closestRing);
+                            localRings.add(rightChoice);
+                            spurs.remove(firstSpur);
+                            spurs.remove(secondSpurRight);
+                        } 
+                    }
+                    else if (leftSideModified && !rightSideModified)
+                    {
+                        localRings.remove(closestRing);
+                        localRings.add(leftChoice);
+                        spurs.remove(firstSpur);
+                        spurs.remove(secondSpurLeft);     
+                    }
+                    else if (!leftSideModified && rightSideModified)
+                    {
+                        localRings.remove(closestRing);
+                        localRings.add(rightChoice);
+                        spurs.remove(firstSpur);
+                        spurs.remove(secondSpurRight);   
+                    }
                 }
                 else
                 {
@@ -191,127 +224,132 @@ public class NeighbourGenerator
     {
         Solution clonedSol = sol.clone();
         
-        Ring spiltCandidate = null;
-        Ring clonedSpiltCandidate = null;
+        List<Ring> spiltCandidateList = new ArrayList<Ring>();
         for(Ring ring : clonedSol.getLocalrings())
         {
             if(ring.getSize() >= Constants.MIN_SIZE_FOR_SPLIT)
             {
-                spiltCandidate = ring;
-                break;
+                spiltCandidateList.add(ring);
             }
         }
-        if(spiltCandidate != null)
+        while(spiltCandidateList.size() > 0)
         {
-            clonedSpiltCandidate = spiltCandidate.clone();
-            clonedSpiltCandidate.getNodes().remove(clonedSpiltCandidate.getSize() - 1);
-
-            boolean solutionFound = false;
-            Ring firstNewRing = null;
-
-            for(int i = 0; i < clonedSpiltCandidate.getSize() - 3; i++)
+            Ring spiltCandidate = null;
+            Ring clonedSpiltCandidate = null;
+            spiltCandidate = spiltCandidateList.get(rand.nextInt(spiltCandidateList.size()));
+            if(spiltCandidate != null)
             {
-                for(int j = i + 2; j < clonedSpiltCandidate.getSize() - 3; j++)
+                spiltCandidateList.remove(spiltCandidate);
+                clonedSpiltCandidate = spiltCandidate.clone();
+                clonedSpiltCandidate.getNodes().remove(clonedSpiltCandidate.getSize() - 1);
+    
+                boolean solutionFound = false;
+                Ring firstNewRing = null;
+    
+                for(int i = 0; i < clonedSpiltCandidate.getSize() - 3; i++)
                 {
-                    Node firstRingNode1 = clonedSpiltCandidate.getSpecificNode(i);
-                    Node firstRingNode2 = clonedSpiltCandidate.getSpecificNode(j);
-
-                    Node secondRingNode1 = null;
-                    if(i != 0)
-                        secondRingNode1 = clonedSpiltCandidate.getSpecificNode(i - 1);
-                    else
-                        secondRingNode1 = clonedSpiltCandidate.getSpecificNode(clonedSpiltCandidate.getSize() - 1);
-
-                    Node secondRingNode2 = clonedSpiltCandidate.getSpecificNode(j + 1);
-
-                    if(QaRsapUtils.isAdj(firstRingNode1.getId(), adjList.getAdjList(firstRingNode2.getId())))
+                    for(int j = i + 2; j < clonedSpiltCandidate.getSize() - 3; j++)
                     {
-                        if(QaRsapUtils.isAdj(secondRingNode1.getId(), adjList.getAdjList(secondRingNode2.getId())))
+                        Node firstRingNode1 = clonedSpiltCandidate.getSpecificNode(i);
+                        Node firstRingNode2 = clonedSpiltCandidate.getSpecificNode(j);
+    
+                        Node secondRingNode1 = null;
+                        if(i != 0)
+                            secondRingNode1 = clonedSpiltCandidate.getSpecificNode(i - 1);
+                        else
+                            secondRingNode1 = clonedSpiltCandidate.getSpecificNode(clonedSpiltCandidate.getSize() - 1);
+    
+                        Node secondRingNode2 = clonedSpiltCandidate.getSpecificNode(j + 1);
+    
+                        if(QaRsapUtils.isAdj(firstRingNode1.getId(), adjList.getAdjList(firstRingNode2.getId())))
                         {
-                            // Build first new ring
-                            firstNewRing = new Ring();
-                            for(int k = i; k <= j; k++)
+                            if(QaRsapUtils.isAdj(secondRingNode1.getId(), adjList.getAdjList(secondRingNode2.getId())))
                             {
-                                firstNewRing.getNodes().add(clonedSpiltCandidate.getNodes().get(k));
+                                // Build first new ring
+                                firstNewRing = new Ring();
+                                for(int k = i; k <= j; k++)
+                                {
+                                    firstNewRing.getNodes().add(clonedSpiltCandidate.getNodes().get(k));
+                                }
+                                for(int k = 0; k < firstNewRing.getNodes().size(); k++)
+                                {
+                                    clonedSpiltCandidate.removeNode(firstNewRing.getSpecificNode(k));
+                                }
+    
+                                firstNewRing.getNodes().add(firstNewRing.getNodes().get(0));
+                                clonedSol.getLocalrings().add(firstNewRing);
+    
+                                // The remainder is the second new ring
+                                clonedSpiltCandidate.addNode(clonedSpiltCandidate.getNodes().get(0));
+                                clonedSol.getLocalrings().add(clonedSpiltCandidate);
+    
+                                // Remove original split candidate ring
+                                clonedSol.getLocalrings().remove(spiltCandidate);
+                                solutionFound = true;
+                                break;
                             }
-                            for(int k = 0; k < firstNewRing.getNodes().size(); k++)
-                            {
-                                clonedSpiltCandidate.removeNode(firstNewRing.getSpecificNode(k));
-                            }
-
-                            firstNewRing.getNodes().add(firstNewRing.getNodes().get(0));
-                            clonedSol.getLocalrings().add(firstNewRing);
-
-                            // The remainder is the second new ring
-                            clonedSpiltCandidate.addNode(clonedSpiltCandidate.getNodes().get(0));
-                            clonedSol.getLocalrings().add(clonedSpiltCandidate);
-
-                            // Remove original split candidate ring
-                            clonedSol.getLocalrings().remove(spiltCandidate);
-                            solutionFound = true;
-                            break;
                         }
                     }
+                    if(solutionFound)
+                        break;
                 }
+                //Ensure newly created rings are still connected to tertiary Ring. If not, connect them.
                 if(solutionFound)
-                    break;
-            }
-            //Ensure newly created rings are still connected to tertiary Ring. If not, connect them.
-            if(solutionFound)
-            {
-                if(clonedSol.getTertiaryRing() == null)
                 {
-                    List<Node> tempNodeList = new ArrayList<Node>(network.getNetworkStructure().getNodes().getNode());
-                    for(Spur spur : clonedSol.getSpurs())
+                    if(clonedSol.getTertiaryRing() == null)
                     {
-                        tempNodeList.remove(spur.getSpurNode());
-                    }
-                   
-                    Ring tertiaryRing = solGenerator.generateTertiaryRing(clonedSol.getSpurs(), clonedSol.getLocalrings());
-                    if(tertiaryRing != null)
-                    {
-                        clonedSol.setTertiaryRing(tertiaryRing);
+                        List<Node> tempNodeList = new ArrayList<Node>(network.getNetworkStructure().getNodes().getNode());
+                        for(Spur spur : clonedSol.getSpurs())
+                        {
+                            tempNodeList.remove(spur.getSpurNode());
+                        }
+                       
+                        Ring tertiaryRing = solGenerator.generateTertiaryRing(clonedSol.getSpurs(), clonedSol.getLocalrings());
+                        if(tertiaryRing != null)
+                        {
+                            clonedSol.setTertiaryRing(tertiaryRing);
+                        }
+                        else
+                        {
+                            return sol; 
+                        }
                     }
                     else
                     {
-                        return sol; 
-                    }
-                }
-                else
-                {
-                    Ring tertiaryRing = clonedSol.getTertiaryRing();
-
-                    boolean firstRingConnected = false; // Connected to tertiary
-                    boolean clonedSplitCandidateconnected = false; // Connected to tertiary
-
-                    for(Node node : firstNewRing.getNodes())
-                    {
-                        if(QaRsapUtils.isNodeOnRing(node, tertiaryRing))
+                        Ring tertiaryRing = clonedSol.getTertiaryRing();
+    
+                        boolean firstRingConnected = false; // Connected to tertiary
+                        boolean clonedSplitCandidateconnected = false; // Connected to tertiary
+    
+                        for(Node node : firstNewRing.getNodes())
                         {
-                            firstRingConnected = true;
-                            break;
+                            if(QaRsapUtils.isNodeOnRing(node, tertiaryRing))
+                            {
+                                firstRingConnected = true;
+                                break;
+                            }
                         }
-                    }
-                    for(Node node : clonedSpiltCandidate.getNodes())
-                    {
-                        if(QaRsapUtils.isNodeOnRing(node, tertiaryRing))
+                        for(Node node : clonedSpiltCandidate.getNodes())
                         {
-                            clonedSplitCandidateconnected = true;
-                            break;
+                            if(QaRsapUtils.isNodeOnRing(node, tertiaryRing))
+                            {
+                                clonedSplitCandidateconnected = true;
+                                break;
+                            }
                         }
-                    }
-                    if(! firstRingConnected || ! clonedSplitCandidateconnected)
-                    {
-                        // remove final node to aid reconnecting
-                        tertiaryRing.getNodes().remove(tertiaryRing.getSize() - 1); 
-                    }
-                    if(! firstRingConnected)
-                    {
-                        addLocalRingToTertiary(tertiaryRing, firstNewRing, rand, clonedSol.getSpurs());
-                    }
-                    else if(! clonedSplitCandidateconnected)
-                    {
-                        addLocalRingToTertiary(tertiaryRing, clonedSpiltCandidate, rand, clonedSol.getSpurs());
+                        if(! firstRingConnected || ! clonedSplitCandidateconnected)
+                        {
+                            // remove final node to aid reconnecting
+                            tertiaryRing.getNodes().remove(tertiaryRing.getSize() - 1); 
+                        }
+                        if(! firstRingConnected)
+                        {
+                            addLocalRingToTertiary(tertiaryRing, firstNewRing, rand, clonedSol.getSpurs());
+                        }
+                        else if(! clonedSplitCandidateconnected)
+                        {
+                            addLocalRingToTertiary(tertiaryRing, clonedSpiltCandidate, rand, clonedSol.getSpurs());
+                        }
                     }
                 }
             }
@@ -587,15 +625,22 @@ public class NeighbourGenerator
                 Ring modifiedRing = insert(thisNode, localRings);
                 if(modifiedRing == null)
                 {
-                    Spur spur = solGenerator.createSrup(thisNode, network.getNetworkStructure().getNodes().getNode(), localRings);
-                    if(spur == null)
+                    if(!QaRsapUtils.isNodeOnRing(thisNode, clonedSol.getTertiaryRing()))
                     {
-                        // Fail Gracefully by return original sol
-                        return sol;
+                        Spur spur = solGenerator.createSrup(thisNode, network.getNetworkStructure().getNodes().getNode(), localRings);
+                        if(spur == null)
+                        {
+                            // Fail Gracefully by return original sol
+                            return sol;
+                        }
+                        else
+                        {
+                           clonedSol.getSpurs().add(spur);
+                        }
                     }
                     else
                     {
-                       clonedSol.getSpurs().add(spur);
+                        return sol;
                     }
                 }                
             }
@@ -643,7 +688,13 @@ public class NeighbourGenerator
             // pick a random spur
             int randomSpur = rand.nextInt(spurs.size());
             Spur pickedSpur = spurs.get(randomSpur);
-
+            
+            //First try to create a new small ring from this node and other spurs
+            Solution newSol = createSmallring(pickedSpur.getSpurNode(), clonedSol);
+            if(newSol != null)
+            {
+                return newSol;
+            }
             Ring modifiedRing = insert(pickedSpur.getSpurNode(), localRings);
             if(modifiedRing != null)
             {
@@ -666,6 +717,24 @@ public class NeighbourGenerator
         //Avoids this elements of the VNS getting trapped.
         if (!spurModified)
         {
+            //First try to create a new small ring from random ring node and other spurs
+            Ring deleteRing = localRings.get(rand.nextInt(localRings.size()));
+            if(deleteRing.getNodes().size() > 4)
+            {
+                Node deleteNode = deleteRing.getNodes().get(rand.nextInt(deleteRing.getNodes().size()));
+                if(delete(deleteNode, deleteRing))
+                {
+                    Solution newSol = createSmallring(deleteNode, clonedSol);
+                    if(newSol != null)
+                    {
+                        return newSol;
+                    }
+                }
+            }
+            clonedSol = sol.clone();
+            localRings = clonedSol.getLocalrings();
+            spurs = clonedSol.getSpurs();
+            
             if(sol.getLocalrings().size() > 1)
             {
                 if(! deleteInsert(clonedSol, rand))
@@ -1340,6 +1409,92 @@ public class NeighbourGenerator
         return succeeded;
     }
     
+    private Solution createSmallring (Node seedNode, Solution inputClonedSol)
+    {
+        List<Node> tempNodeList = new ArrayList<Node>();
+        List<Node> spurCandidates = new ArrayList<Node>();
+        
+        
+        //Build tempNodeList
+        for(int i=0; i<inputClonedSol.getSpurs().size(); i++ )
+        {
+            Spur thisSpur = inputClonedSol.getSpurs().get(i);
+            tempNodeList.add(thisSpur.getSpurNode());
+        }
+        if(!tempNodeList.contains(seedNode))
+        {
+            tempNodeList.add(seedNode);
+        }
+        
+        Ring newRing = solGenerator.createLocalRing(seedNode, networkNodes, tempNodeList, spurCandidates, inputClonedSol.getLocalrings());
+        if(newRing != null)
+        {
+            //remove used spurs
+            for(int i=0; i<newRing.getNodes().size(); i++ )
+            {
+                Node thisNode = newRing.getNodes().get(i);
+                Spur possibleSpur = QaRsapUtils.isNodeASpur(thisNode.getId(), inputClonedSol.getSpurs());
+                if(possibleSpur != null)
+                {
+                    inputClonedSol.getSpurs().remove(possibleSpur);
+                }
+            }
+            
+            boolean newRingconnected = false;
+            for(Node node : newRing.getNodes())
+            {
+                if(QaRsapUtils.isNodeOnRing(node, inputClonedSol.getTertiaryRing()))
+                {
+                    newRingconnected = true;
+                    break;
+                }
+            }
+            if(newRingconnected)
+            {
+                inputClonedSol.getLocalrings().add(newRing);
+            }
+            else
+            {
+               if(inputClonedSol.getTertiaryRing() == null || inputClonedSol.getTertiaryRing().getNodes().size() == 0) 
+               {
+                   inputClonedSol.getLocalrings().add(newRing);
+                   Ring tertRing = solGenerator.generateTertiaryRing(inputClonedSol.getSpurs(), inputClonedSol.getLocalrings());
+                   if(tertRing != null)
+                   {
+                       inputClonedSol.setTertiaryRing(tertRing);
+                   }
+                   else
+                   {
+                       return null;
+                   }
+               }
+               else
+               {
+                   boolean success =  addLocalRingToTertiary(inputClonedSol.getTertiaryRing(), newRing, rand, inputClonedSol.getSpurs());
+                   if(success)
+                   {
+                       inputClonedSol.getLocalrings().add(newRing);
+                   }
+                   else
+                   {
+                       return null;
+                   }
+               }
+            }
+        }
+        else
+        {
+            return null;
+        }
+        // Validate soluton
+        if(!inputClonedSol.validate(nodeAdjacencies, networkNodes.size()))
+        {
+            //validation error detected, returning original solution
+            System.out.println("validation error detected on create small ring, returning original solution");
+            return null;
+        }
+        return inputClonedSol;
+    }
     /**
      * This is a utility method which returns the position of a node on its ring.
      */
