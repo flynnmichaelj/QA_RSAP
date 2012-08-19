@@ -2,20 +2,14 @@ package org.openstreetmap.gui.jmapviewer;
 
 //License: GPL. Copyright 2008 by Jan Peter Stotz
 
-import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
-import java.awt.Image;
 import java.awt.Insets;
 import java.awt.Point;
-import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
-import java.awt.font.TextAttribute;
-import java.awt.geom.Rectangle2D;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
