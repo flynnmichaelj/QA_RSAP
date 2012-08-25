@@ -66,8 +66,8 @@ public class NodeAdjacencies
                List<AdjNode> sourceAdj = adjacencies.get(source);
                List<AdjNode> targetAdj = adjacencies.get(target);
                
-               //Note: if we decide to pick lowest or highest link, cater for cost of 0.0
-               if(!QaRsapUtils.isAdj(target, sourceAdj))
+               double possiblePreviousCostS = QaRsapUtils.isAdjCost(target, sourceAdj);
+               if(possiblePreviousCostS == 0.0 )
                {
                    AdjNode srcAdjNode = new AdjNode();
                    
@@ -88,8 +88,21 @@ public class NodeAdjacencies
                    }
                    
                }
+               else if(possiblePreviousCostS > cost)
+               {
+                   for(int i=0; i< sourceAdj.size(); i++)
+                   {
+                       AdjNode thisAdjNode = sourceAdj.get(i);
+                       if(target.equalsIgnoreCase(sourceAdj.get(i).getNodeName()))
+                       {
+                           thisAdjNode.setCost(cost);
+                       }
+                   }
+               }
                
-               if(!QaRsapUtils.isAdj(source, targetAdj))
+               
+               double possiblePreviousCostT = QaRsapUtils.isAdjCost(source, targetAdj);
+               if(possiblePreviousCostT == 0.0 )
                {
                    AdjNode targAdjNode = new AdjNode();
                    //Record target adj
@@ -108,6 +121,17 @@ public class NodeAdjacencies
                        targAdjNode.setCost(cost);
                        targetAdj.add(targAdjNode);
                        
+                   }
+               }
+               else if(possiblePreviousCostT > cost)
+               {
+                   for(int i=0; i< targetAdj.size(); i++)
+                   {
+                       AdjNode thisAdjNode = targetAdj.get(i);
+                       if(source.equalsIgnoreCase(targetAdj.get(i).getNodeName()))
+                       {
+                           thisAdjNode.setCost(cost);
+                       }
                    }
                }
            }

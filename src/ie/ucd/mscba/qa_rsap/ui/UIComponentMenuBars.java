@@ -238,7 +238,7 @@ public class UIComponentMenuBars
         lab_initMaxLRS.setText("Initial max Local ring size");
         com_initMaxLRS = new Combo (composite, SWT.READ_ONLY);
         com_initMaxLRS.setLayoutData(new GridData(70, 25));
-        com_initMaxLRS.setItems (new String [] {"3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"});
+        com_initMaxLRS.setItems (new String [] {"3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17"});
         com_initMaxLRS.select(4);
         com_initMaxLRS.setEnabled(false);
         com_initMaxLRS.addSelectionListener(new SelectionAdapter() {
@@ -266,7 +266,7 @@ public class UIComponentMenuBars
         lab_maxLRS.setText("Max local ring size");
         com_maxLRS = new Combo (composite, SWT.READ_ONLY);
         com_maxLRS.setLayoutData(new GridData(70, 25));
-        com_maxLRS.setItems (new String [] {"3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17"});
+        com_maxLRS.setItems (new String [] {"3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19"});
         com_maxLRS.select(5);
         com_maxLRS.setEnabled(false);
         com_maxLRS.addSelectionListener(new SelectionAdapter() {
